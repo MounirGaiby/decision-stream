@@ -1,8 +1,8 @@
 # A Decision System
 
-Data: TBD (Dataset Kaggle etc)
+Data: Dataset from Kaggle
 Ingestion: Kafka
-Storage: NoSQL (MongoDB, Redis, HDFS, etc)
+Storage: MongoDB
 Treatment: SparkMl, SparkStreaming
-Visualisation: PowerBI, Tableau
+Visualisation: Tableau
 
