@@ -1,0 +1,51 @@
+services:
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8080:8080"
+    environment:
+      DOZZLE_LEVEL: info
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      
+      # Define the listeners
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      
+      # Security Map
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      
+      # We must tell Kafka to use the 'INTERNAL' lane for its own communication
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+  producer:
+    build: .
+    container_name: producer
+    depends_on:
+      - kafka
+    restart: always
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: 'kafka:29092'
+      KAFKA_TOPIC: "fraud-detection-stream"
+      # Tell Python to save the DB inside the mounted folder
+      STATE_FILE: "/app/state/producer_state.db" 
+    volumes:
+      # Mount the FOLDER, not the file
+      - ./state:/app/state 
+      - ~/.cache/kagglehub:/root/.cache/kagglehub
