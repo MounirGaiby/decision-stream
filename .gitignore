@@ -3,6 +3,8 @@
 
 .env
 
+/models
+
 # Python
 /venv
 __pycache__/
