@@ -86,7 +86,7 @@ run-basic:
         --master local[*] \
         --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
         --conf spark.mongodb.write.connection.uri="mongodb://admin:admin123@mongodb:27017/fraud_detection.transactions?authSource=admin" \
-        /app/spark-processor.py
+        /app/src/spark-processor.py
 
 # Run Spark processor WITH ML predictions
 run-ml:
@@ -96,18 +96,39 @@ run-ml:
         --master local[*] \
         --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
         --conf spark.mongodb.write.connection.uri="mongodb://admin:admin123@mongodb:27017/fraud_detection.transactions?authSource=admin" \
-        /app/spark-processor-ml.py
+        /app/src/spark-processor-ml.py
 
-# Train the ML model (Random Forest)
+# Train the ML model (Random Forest - single model)
 train:
     @echo "🎓 Training fraud detection model..."
     @echo "⏱️  This will take 5-10 minutes..."
     docker exec spark /opt/spark/bin/spark-submit \
         --master local[*] \
         --packages org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
-        /app/train_model.py
+        /app/src/train_model.py
     @echo ""
     @echo "✅ Model trained! Next step: just run-ml"
+
+# Train ensemble models (Random Forest + Gradient Boosting + Logistic Regression)
+train-ensemble:
+    @echo "🎓 Training ensemble models (3 models)..."
+    @echo "⏱️  This will take 10-15 minutes..."
+    docker exec spark /opt/spark/bin/spark-submit \
+        --master local[*] \
+        --packages org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
+        /app/src/train_models_ensemble.py
+    @echo ""
+    @echo "✅ All 3 models trained! Next step: just run-ensemble"
+
+# Run Spark processor WITH ensemble ML predictions (3 models)
+run-ensemble:
+    @echo "🤖 Starting Ensemble ML processor (3 models + voting)..."
+    @echo "💡 Press Ctrl+C to stop"
+    docker exec spark /opt/spark/bin/spark-submit \
+        --master local[*] \
+        --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
+        --conf spark.mongodb.write.connection.uri="mongodb://admin:admin123@mongodb:27017/fraud_detection?authSource=admin" \
+        /app/src/spark-processor-ensemble.py
 
 # =============================================================================
 # Monitoring & Verification
@@ -120,6 +141,10 @@ check:
 # Check ML predictions and model performance
 check-ml:
     @bash -c "source venv/bin/activate && python src/check_ml_predictions.py"
+
+# Check ensemble predictions (3 models + flagged transactions)
+check-ensemble:
+    @bash -c "source venv/bin/activate && python src/check_ensemble.py"
 
 # View logs for all services
 logs:
