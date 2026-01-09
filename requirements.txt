@@ -3,3 +3,4 @@ pandas
 kagglehub
 pyspark
 pymongo
+psutil

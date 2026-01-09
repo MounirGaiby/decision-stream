@@ -362,16 +362,25 @@ docker exec spark /opt/spark/bin/spark-submit ...
 **Common Questions:**
 
 **Q: How fast can it process transactions?**
-A: Currently ~10 transactions/second, but Kafka+Spark can scale to millions/second with more resources.
+A: Currently ~10 transactions/second, but Kafka+Spark can scale to millions/second with more resources. Use `just benchmark` to measure actual throughput.
 
 **Q: What if the model makes a mistake?**
-A: We track False Positives (1 in 26,000) and False Negatives (4 in 26,000). System provides probability scores for manual review.
+A: We track False Positives (1 in 26,000) and False Negatives (4 in 26,000). System provides probability scores for manual review. See Tableau dashboards for detailed confusion matrix.
 
 **Q: How often is the model retrained?**
-A: Can be retrained periodically (daily/weekly) as new data accumulates. Takes 5-10 minutes.
+A: Can be retrained periodically (daily/weekly) as new data accumulates. Takes 5-10 minutes. Monitor accuracy trends in Tableau to determine retraining needs.
 
 **Q: Can it handle real-world scale?**
-A: Yes - architecture is horizontally scalable. Add more Kafka partitions, Spark workers, and MongoDB replicas.
+A: Yes - architecture is horizontally scalable. Add more Kafka partitions, Spark workers, and MongoDB replicas. Benchmark scripts help identify bottlenecks.
 
 **Q: What about data privacy?**
-A: Dataset uses PCA transformation (V1-V28) - original features are anonymized. Only metadata (time, amount) is identifiable.
+A: Dataset uses PCA transformation (V1-V28) - original features are anonymized. Only metadata (time, amount) is identifiable. See DATABASE_STRUCTURE.md for details.
+
+**Q: How do we make decisions based on the data?**
+A: Use Tableau visualizations to analyze fraud patterns, ML performance, and risk levels. See TABLEAU_GUIDE.md for decision-making framework and chart interpretations.
+
+## Additional Resources
+
+- **Database Structure**: See [DATABASE_STRUCTURE.md](DATABASE_STRUCTURE.md) for schema, examples, and queries
+- **Tableau Guide**: See [TABLEAU_GUIDE.md](TABLEAU_GUIDE.md) for visualization setup and decision-making
+- **Benchmarking**: Run `just benchmark` to measure system performance

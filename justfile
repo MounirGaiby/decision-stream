@@ -74,6 +74,25 @@ install-deps:
     @echo "✅ Dependencies installed successfully!"
 
 # =============================================================================
+# Benchmarking & Performance
+# =============================================================================
+
+# Run comprehensive benchmark (takes ~60 seconds)
+benchmark:
+    @echo "📊 Running comprehensive benchmark..."
+    python3 src/benchmark_pipeline.py
+
+# Run quick benchmark (fast statistics)
+benchmark-quick:
+    @echo "⚡ Running quick benchmark..."
+    python3 src/quick_benchmark.py
+
+# Run throughput measurement only (custom duration)
+benchmark-throughput duration='60':
+    @echo "📈 Measuring throughput for {{duration}} seconds..."
+    python3 src/benchmark_pipeline.py --throughput-duration {{duration}}
+
+# =============================================================================
 # Data Processing & ML
 # =============================================================================
 
