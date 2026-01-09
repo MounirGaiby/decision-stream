@@ -4,6 +4,40 @@ Projet réalisé dans le cadre du module **Processus Décisionnel Big Data**.
 
 Système complet de détection de fraude bancaire utilisant Machine Learning et traitement en temps réel.
 
+## 🖥️ Support Multi-Plateforme
+
+Ce projet fonctionne sur **Windows**, **macOS** et **Linux** :
+- Scripts PowerShell (`.ps1`) pour Windows
+- Scripts Bash (`.sh`) pour macOS et Linux
+- Tous les scripts Docker et Python fonctionnent de manière identique sur toutes les plateformes
+
+## 🚀 Task Runners - Méthode Recommandée
+
+Pour une utilisation plus simple et reproductible, utilisez les task runners :
+
+**Recommandé - `just` (moderne, simple):**
+```bash
+brew install just           # Installation (macOS)
+just --list                 # Voir toutes les commandes
+just setup                  # Configuration complète
+just run-basic              # Démarrer sans ML
+just train                  # Entraîner le modèle
+just run-ml                 # Démarrer avec ML
+just health                 # Vérifier l'état du système
+```
+
+**Alternative - `make` (traditionnel, universel):**
+```bash
+make help                   # Voir toutes les commandes
+make setup                  # Configuration complète
+make run-basic              # Démarrer sans ML
+make train                  # Entraîner le modèle
+make run-ml                 # Démarrer avec ML
+make health                 # Vérifier l'état du système
+```
+
+📖 **Guide complet:** Voir [TASK_RUNNERS.md](TASK_RUNNERS.md)
+
 ---
 
 ## 📊 Architecture Complète
@@ -38,6 +72,27 @@ Producer (Python) → Kafka → Spark Streaming → MongoDB → Tableau
 - Docker Desktop installé et démarré
 - Python 3.9+ installé
 - Compte Kaggle (pour le dataset)
+- **Recommandé**: `just` ou `make` (task runners)
+- **Alternative**:
+  - **Windows**: PowerShell
+  - **macOS/Linux**: Bash (inclus par défaut)
+
+### Installation de `just` (Recommandé)
+
+```bash
+# macOS
+brew install just
+
+# Linux
+cargo install just
+
+# Windows
+cargo install just
+# ou
+scoop install just
+```
+
+> **Note**: Si vous préférez ne pas installer `just`, vous pouvez utiliser `make` (pré-installé sur macOS/Linux) ou les scripts directs (`.sh`/`.ps1`)
 
 ### Étape 1 : Configuration Kaggle
 
@@ -55,7 +110,17 @@ STATE_FILE=/app/state/producer_state.db
 
 ### Étape 2 : Démarrage de l'Infrastructure
 
-```powershell
+**Méthode recommandée (avec task runner):**
+```bash
+# Avec just (recommandé)
+just start
+
+# Avec make (alternative)
+make start
+```
+
+**Méthode manuelle (avec Docker):**
+```bash
 # Démarrer tous les services Docker
 docker-compose up -d
 
@@ -71,9 +136,23 @@ docker ps
 
 ### Étape 3 : Installation des Dépendances Python (Spark)
 
+**Méthode recommandée (task runner):**
+```bash
+# Avec just (recommandé)
+just install-deps
+
+# Avec make (alternative)
+make install-deps
+```
+
+**Méthode manuelle (scripts directs):**
 ```powershell
-# Installer numpy, pandas, scikit-learn dans le container Spark
+# Windows (PowerShell)
 .\setup-spark-dependencies.ps1
+```
+```bash
+# macOS/Linux (Bash)
+./setup-spark-dependencies.sh
 ```
 
 **Durée :** 3-5 minutes
@@ -81,27 +160,79 @@ docker ps
 
 ## 🔄 Workflow Complet
 
+### 🎯 Workflow Rapide (avec Task Runners)
+
+```bash
+# Configuration initiale (une seule fois)
+just setup                  # ou: make setup
+
+# Phase 1: Accumuler des données (5-10 minutes)
+just run-basic              # ou: make run-basic
+
+# Vérifier les données (autre terminal)
+just check                  # ou: make check
+
+# Phase 2: Entraîner le modèle (arrêter run-basic avec Ctrl+C d'abord)
+just train                  # ou: make train
+
+# Phase 3: Exécuter avec ML
+just run-ml                 # ou: make run-ml
+
+# Vérifier les prédictions
+just check-ml               # ou: make check-ml
+
+# État du système
+just health                 # ou: make health
+```
+
+### 📝 Workflow Détaillé (méthode manuelle)
+
 ### Phase 1 : Traitement Sans ML (Accumulation de données)
 
+**Avec task runners (recommandé):**
+```bash
+just run-basic              # ou: make run-basic
+```
+
+**Avec scripts (alternative):**
 ```powershell
-# avec PowerShell
+# Windows (PowerShell)
 .\start-spark-processor.ps1
+```
+```bash
+# macOS/Linux (Bash)
+./start-spark-processor.sh
 ```
 
 **Laisser tourner 5-10 minutes** pour accumuler ~5000 transactions.
 
-**Vérification :**
-```powershell
-python check_mongodb.py
+**Vérification:**
+```bash
+# Avec task runner
+just check                  # ou: make check
+
+# Avec Python direct
+python check-mongodb.py
 ```
 
 ### Phase 2 : Entraînement du Modèle ML
 
-```powershell
+**Avec task runners (recommandé):**
+```bash
 # 1. Arrêter le processeur Spark (Ctrl+C dans le terminal)
 
 # 2. Entraîner le modèle Random Forest
+just train                  # ou: make train
+```
+
+**Avec scripts (alternative):**
+```powershell
+# Windows (PowerShell)
 .\train-model.ps1
+```
+```bash
+# macOS/Linux (Bash)
+./train-model.sh
 ```
 
 **Durée :** 5-10 minutes
@@ -128,9 +259,19 @@ python check_mongodb.py
 
 ### Phase 3 : Prédictions en Temps Réel
 
+**Avec task runners (recommandé):**
+```bash
+just run-ml                 # ou: make run-ml
+```
+
+**Avec scripts (alternative):**
 ```powershell
-# Démarrer le processeur Spark avec ML
+# Windows (PowerShell)
 .\start-spark-ml.ps1
+```
+```bash
+# macOS/Linux (Bash)
+./start-spark-ml.sh
 ```
 
 **Le système va maintenant :**
@@ -138,8 +279,12 @@ python check_mongodb.py
 - Faire des prédictions en temps réel
 - Ajouter `fraud_prediction` et `fraud_probability` dans MongoDB
 
-**Vérification des prédictions :**
-```powershell
+**Vérification des prédictions:**
+```bash
+# Avec task runner
+just check-ml               # ou: make check-ml
+
+# Avec Python direct
 python check_ml_predictions.py
 ```
 
@@ -244,9 +389,9 @@ Les 10 features les plus importantes (typiquement) :
 
 ### Scripts de Vérification
 
-```powershell
+```bash
 # Vérifier les données dans MongoDB
-python check_mongodb.py
+python check-mongodb.py
 
 # Vérifier les prédictions ML
 python check_ml_predictions.py
@@ -255,6 +400,24 @@ python check_ml_predictions.py
 docker logs producer --tail 50
 docker logs spark --tail 50
 docker logs mongodb --tail 50
+```
+
+### 📋 Commandes Rapides par Plateforme
+
+**Windows (PowerShell):**
+```powershell
+.\setup-spark-dependencies.ps1    # Installer dépendances
+.\start-spark-processor.ps1        # Démarrer sans ML
+.\train-model.ps1                  # Entraîner modèle
+.\start-spark-ml.ps1               # Démarrer avec ML
+```
+
+**macOS/Linux (Bash):**
+```bash
+./setup-spark-dependencies.sh     # Installer dépendances
+./start-spark-processor.sh         # Démarrer sans ML
+./train-model.sh                   # Entraîner modèle
+./start-spark-ml.sh                # Démarrer avec ML
 ```
 
 ---
