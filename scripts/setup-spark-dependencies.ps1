@@ -18,7 +18,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "[SUCCESS] Dependencies installed successfully!" -ForegroundColor Green
     Write-Host ""
     Write-Host "You can now train the model:" -ForegroundColor Yellow
-    Write-Host "  .\train-model.ps1" -ForegroundColor White
+    Write-Host "  scripts\train-model.ps1" -ForegroundColor White
 } else {
     Write-Host ""
     Write-Host "[ERROR] Failed to install dependencies!" -ForegroundColor Red

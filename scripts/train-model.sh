@@ -29,7 +29,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "Next steps:"
     echo "1. Stop current Spark processor if running (Ctrl+C)"
-    echo "2. Start ML-enabled processor: ./start-spark-ml.sh"
+    echo "2. Start ML-enabled processor: scripts/start-spark-ml.sh"
 else
     echo ""
     echo "[ERROR] Model training failed!"

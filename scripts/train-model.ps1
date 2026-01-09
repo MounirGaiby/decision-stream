@@ -29,7 +29,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
     Write-Host "1. Stop current Spark processor if running (Ctrl+C)" -ForegroundColor White
-    Write-Host "2. Start ML-enabled processor: .\start-spark-ml.ps1" -ForegroundColor White
+    Write-Host "2. Start ML-enabled processor: scripts\start-spark-ml.ps1" -ForegroundColor White
 } else {
     Write-Host ""
     Write-Host "[ERROR] Model training failed!" -ForegroundColor Red

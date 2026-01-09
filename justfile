@@ -115,11 +115,11 @@ train:
 
 # Check MongoDB data and statistics
 check:
-    @bash -c "source venv/bin/activate && python check-mongodb.py"
+    @bash -c "source venv/bin/activate && python src/check-mongodb.py"
 
 # Check ML predictions and model performance
 check-ml:
-    @bash -c "source venv/bin/activate && python check_ml_predictions.py"
+    @bash -c "source venv/bin/activate && python src/check_ml_predictions.py"
 
 # View logs for all services
 logs:

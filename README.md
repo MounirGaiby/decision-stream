@@ -103,20 +103,30 @@ just health
 
 ## Documentation
 
-- **[INSTRUCTIONS.md](INSTRUCTIONS.md)** - Step-by-step presentation guide
-- **[COMMANDS.md](COMMANDS.md)** - Complete command reference
-- **[CLAUDE.md](CLAUDE.md)** - Developer guide for Claude Code
+- **[INSTRUCTIONS.md](docs/INSTRUCTIONS.md)** - Step-by-step presentation guide
+- **[COMMANDS.md](docs/COMMANDS.md)** - Complete command reference
+- **[CLAUDE.md](docs/CLAUDE.md)** - Developer guide for Claude Code
 
 ## Project Structure
 
 ```
 decision-stream/
-├── producer.py                 # Kafka producer
-├── spark-processor.py          # Basic processor (no ML)
-├── spark-processor-ml.py       # ML-enabled processor
-├── train_model.py              # Model training
-├── check-mongodb.py            # Data monitoring
-├── check_ml_predictions.py     # ML monitoring
+├── docs/                       # Documentation
+│   ├── INSTRUCTIONS.md         # Presentation guide
+│   ├── COMMANDS.md             # Command reference
+│   └── CLAUDE.md               # Developer guide
+├── scripts/                    # Shell & PowerShell scripts
+│   ├── setup-spark-dependencies.sh
+│   ├── start-spark-processor.sh
+│   ├── start-spark-ml.sh
+│   └── train-model.sh
+├── src/                        # Python source code
+│   ├── producer.py             # Kafka producer
+│   ├── spark-processor.py      # Basic processor (no ML)
+│   ├── spark-processor-ml.py   # ML-enabled processor
+│   ├── train_model.py          # Model training
+│   ├── check-mongodb.py        # Data monitoring
+│   └── check_ml_predictions.py # ML monitoring
 ├── docker-compose.yml          # Services orchestration
 ├── justfile                    # Task runner commands
 └── requirements.txt            # Python dependencies
@@ -147,7 +157,7 @@ just clean          # Clean all data
 just clean-model    # Remove trained model
 ```
 
-See [COMMANDS.md](COMMANDS.md) for complete reference.
+See [COMMANDS.md](docs/COMMANDS.md) for complete reference.
 
 ## License
 

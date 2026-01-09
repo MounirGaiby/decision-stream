@@ -92,7 +92,7 @@ docker-compose up -d
 docker ps
 
 # Install Python ML dependencies in Spark container (required once)
-./setup-spark-dependencies.sh  # macOS/Linux
+scripts/setup-spark-dependencies.sh  # macOS/Linux
 ```
 
 **Services:**
@@ -309,7 +309,7 @@ This project doesn't have unit tests. To verify functionality:
 - `COMMANDS.md`: Command reference
 - `CLAUDE.md`: This file - comprehensive guide for Claude Code
 
-**Code Files:**
+**Source Code** (`src/` folder):
 - `producer.py`: Kafka producer
 - `spark-processor.py`: Basic Spark processor
 - `spark-processor-ml.py`: ML-enabled processor
@@ -317,14 +317,21 @@ This project doesn't have unit tests. To verify functionality:
 - `check-mongodb.py`: MongoDB monitoring
 - `check_ml_predictions.py`: ML prediction monitoring
 
-**Configuration:**
+**Configuration** (root directory):
 - `docker-compose.yml`: Service definitions
 - `justfile`: Task runner commands
+- `Makefile`: Alternative task runner
 - `requirements.txt`: Python dependencies
 - `.env`: Environment variables (not in git)
 
-**Scripts:**
+**Scripts** (`scripts/` folder):
 - `setup-spark-dependencies.sh`: Install ML libs in Spark container
 - `start-spark-processor.sh`: Start basic processor
 - `start-spark-ml.sh`: Start ML processor
 - `train-model.sh`: Train model
+- PowerShell versions (`.ps1`) for Windows
+
+**Documentation** (`docs/` folder):
+- `INSTRUCTIONS.md`: Step-by-step presentation guide
+- `COMMANDS.md`: Command reference
+- `CLAUDE.md`: This file - developer guide

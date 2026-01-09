@@ -19,7 +19,7 @@ if [ $? -eq 0 ]; then
     echo "[SUCCESS] Dependencies installed successfully!"
     echo ""
     echo "You can now train the model:"
-    echo "  ./train-model.sh"
+    echo "  scripts/train-model.sh"
 else
     echo ""
     echo "[ERROR] Failed to install dependencies!"

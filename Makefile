@@ -128,10 +128,10 @@ train: ## Train the ML model
 # =============================================================================
 
 check: ## Check MongoDB data and statistics
-	@python check-mongodb.py
+	@bash -c "source venv/bin/activate && python src/check-mongodb.py"
 
 check-ml: ## Check ML predictions and performance
-	@python check_ml_predictions.py
+	@bash -c "source venv/bin/activate && python src/check_ml_predictions.py"
 
 logs: ## View logs for all services
 	@echo "📋 Recent logs from all services:"
