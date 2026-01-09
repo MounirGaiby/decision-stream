@@ -15,7 +15,7 @@ default:
 # =============================================================================
 
 # Setup everything from scratch (first time setup)
-setup: install-deps start check
+setup: start install-deps check
     @echo "✅ Setup complete! System is ready to use."
     @echo ""
     @echo "Next steps:"
@@ -115,11 +115,11 @@ train:
 
 # Check MongoDB data and statistics
 check:
-    @python check-mongodb.py
+    @bash -c "source venv/bin/activate && python check-mongodb.py"
 
 # Check ML predictions and model performance
 check-ml:
-    @python check_ml_predictions.py
+    @bash -c "source venv/bin/activate && python check_ml_predictions.py"
 
 # View logs for all services
 logs:

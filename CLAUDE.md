@@ -2,12 +2,39 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## IMPORTANT: Virtual Environment Usage
+
+**ALWAYS use the virtual environment for Python commands:**
+- Before running ANY Python scripts or pip commands, activate the venv: `source venv/bin/activate`
+- Never install packages globally - always use `pip install` within the activated venv
+- All monitoring scripts (check-mongodb.py, check_ml_predictions.py) MUST be run from within the venv
+- If new Python dependencies are needed, add them to `requirements.txt` first, then install via `pip install -r requirements.txt`
+
+**Quick setup:**
+```bash
+# Create venv (if doesn't exist)
+python3 -m venv venv
+
+# Activate venv (required before any Python work)
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+## IMPORTANT: Git Commit Policy
+
+**NEVER add Claude co-authored attribution to commits:**
+- Do NOT add `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>` to commit messages
+- Keep commits clean and professional for class presentations
+- Use simple, descriptive commit messages without co-author tags
+
 ## Project Overview
 
 This is a real-time fraud detection system built for Big Data processing. It ingests credit card transaction data from Kaggle, processes it through a streaming pipeline (Kafka → Spark → MongoDB), and uses Machine Learning (Random Forest) to detect fraudulent transactions in real-time.
 
 **Key Components:**
-- **Data Ingestion**: Python producer (`producer.py`) streams transactions from Kaggle dataset to Kafka
+- **Data Ingestion**: Python producer streams transactions from Kaggle dataset to Kafka
 - **Stream Processing**: Spark Streaming reads from Kafka, processes data, and writes to MongoDB
 - **Machine Learning**: SparkML Random Forest classifier trained on accumulated data for fraud prediction
 - **Storage**: MongoDB stores all transactions with optional ML predictions
@@ -29,43 +56,31 @@ Kaggle Dataset → Producer (Python) → Kafka → Spark Streaming → MongoDB
 
 ## Development Commands
 
-### Recommended: Task Runners
+### Recommended: Task Runner (just)
 
-This project includes **task runners** for simplified, reproducible commands:
+This project uses **`just`** for simplified, reproducible commands:
 
-1. **`just` (Recommended)** - Modern, simple, cross-platform
-   - Install: `brew install just` (macOS) or `cargo install just`
-   - Usage: `just --list` to see all commands
-   - Example: `just setup`, `just run-basic`, `just train`, `just run-ml`
+- Install: `brew install just` (macOS) or `cargo install just`
+- Usage: `just --list` to see all commands
+- Example: `just setup`, `just run-basic`, `just train`, `just run-ml`
 
-2. **`make` (Fallback)** - Traditional, universally available
-   - Pre-installed on macOS/Linux
-   - Usage: `make help` to see all commands
-   - Example: `make setup`, `make run-basic`, `make train`, `make run-ml`
-
-See [TASK_RUNNERS.md](TASK_RUNNERS.md) for complete guide.
-
-### Alternative: Direct Scripts
-
-If not using task runners, scripts are available for both Windows (PowerShell `.ps1`) and Unix (Bash `.sh`):
-- **Windows**: Use `.ps1` scripts (e.g., `.\setup-spark-dependencies.ps1`)
-- **macOS/Linux**: Use `.sh` scripts (e.g., `./setup-spark-dependencies.sh`)
+See [COMMANDS.md](COMMANDS.md) for complete reference.
 
 ### Infrastructure Setup
 
-**With Task Runners (Recommended):**
+**With just (Recommended):**
 ```bash
 # Complete first-time setup (starts services, installs dependencies)
-just setup              # or: make setup
+just setup
 
 # Start services only
-just start              # or: make start
+just start
 
 # Check status
-just status             # or: make status
+just status
 
 # Install Python ML dependencies in Spark container
-just install-deps       # or: make install-deps
+just install-deps
 ```
 
 **Manual Method (Docker + Scripts):**
@@ -77,10 +92,7 @@ docker-compose up -d
 docker ps
 
 # Install Python ML dependencies in Spark container (required once)
-# Windows:
-.\setup-spark-dependencies.ps1
-# macOS/Linux:
-./setup-spark-dependencies.sh
+./setup-spark-dependencies.sh  # macOS/Linux
 ```
 
 **Services:**
@@ -89,9 +101,9 @@ docker ps
 - Mongo Express: `http://localhost:8081`
 - Dozzle (logs): `http://localhost:8080`
 
-### Typical Development Workflow
+## Typical Development Workflow
 
-**Quick Start with Task Runners:**
+**Quick Start with just:**
 ```bash
 just setup              # First-time setup
 just run-basic          # Accumulate data (5-10 min)
@@ -106,33 +118,20 @@ just health             # System health check
 
 **Phase 1: Accumulate Training Data**
 ```bash
-# With task runners (recommended):
-just run-basic          # or: make run-basic
+# Start basic processor (no ML)
+just run-basic
 
-# With scripts (alternative):
-# Windows:
-.\start-spark-processor.ps1
-# macOS/Linux:
-./start-spark-processor.sh
+# Monitor progress in another terminal
+just check
 
-# Monitor progress:
-just check              # or: make check
-# or:
-python check-mongodb.py
+# Let it run for 5-10 minutes to accumulate ~5000+ transactions
+# Press Ctrl+C to stop when ready
 ```
 
 **Phase 2: Train ML Model**
 ```bash
-# Stop processor (Ctrl+C), then train model
-
-# With task runners (recommended):
-just train              # or: make train
-
-# With scripts (alternative):
-# Windows:
-.\train-model.ps1
-# macOS/Linux:
-./train-model.sh
+# Train the model on accumulated data
+just train
 
 # This runs: docker exec spark python /app/train_model.py
 # Output: /app/models/fraud_detection_model
@@ -140,48 +139,11 @@ just train              # or: make train
 
 **Phase 3: Run with ML Predictions**
 ```bash
-# With task runners (recommended):
-just run-ml             # or: make run-ml
+# Start ML-enabled processor
+just run-ml
 
-# With scripts (alternative):
-# Windows:
-.\start-spark-ml.ps1
-# macOS/Linux:
-./start-spark-ml.sh
-
-# Verify predictions:
-just check-ml           # or: make check-ml
-# or:
-python check_ml_predictions.py
-```
-
-### Individual Commands
-
-```bash
-# Run Spark processor (no ML)
-docker exec spark /opt/spark/bin/spark-submit \
-  --master local[*] \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
-  --conf spark.mongodb.write.connection.uri="mongodb://admin:admin123@mongodb:27017/fraud_detection.transactions?authSource=admin" \
-  /app/spark-processor.py
-
-# Run Spark processor with ML
-docker exec spark /opt/spark/bin/spark-submit \
-  --master local[*] \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
-  --conf spark.mongodb.write.connection.uri="mongodb://admin:admin123@mongodb:27017/fraud_detection.transactions?authSource=admin" \
-  /app/spark-processor-ml.py
-
-# Train model directly
-docker exec spark python /app/train_model.py
-
-# Check logs
-docker logs producer --tail 50
-docker logs spark --tail 50
-docker logs mongodb --tail 50
-
-# Access Spark container shell
-docker exec -it spark bash
+# Verify predictions in another terminal
+just check-ml
 ```
 
 ## Code Architecture
@@ -305,7 +267,7 @@ STATE_FILE=/app/state/producer_state.db
 
 **"No data in MongoDB"**: Check producer is running (`docker ps`), check Kafka has data (`docker logs producer`), verify Spark is consuming (`docker logs spark`)
 
-**"Could not load ML model"**: Train model first with `./train-model.ps1`, verify `/app/models/fraud_detection_model` exists in Spark container
+**"Could not load ML model"**: Train model first with `just train`, verify `/app/models/fraud_detection_model` exists in Spark container
 
 **"Not enough data for training"**: Accumulate at least 100 transactions (preferably 1000+) with at least 1 fraud case before training
 
@@ -319,8 +281,8 @@ This project doesn't have unit tests. To verify functionality:
 
 1. **Producer Test**: Check `docker logs producer` for "Sent: Time=X, Class=Y" messages
 2. **Kafka Test**: Verify topic exists with producer logs showing successful sends
-3. **Spark Test**: Run `check-mongodb.py` - should show increasing transaction counts
-4. **ML Test**: Run `check_ml_predictions.py` - should show >95% accuracy if model trained properly
+3. **Spark Test**: Run `just check` - should show increasing transaction counts
+4. **ML Test**: Run `just check-ml` - should show >95% accuracy if model trained properly
 
 ## Dependencies
 
@@ -338,3 +300,31 @@ This project doesn't have unit tests. To verify functionality:
 **Spark Container ML Libraries** (installed via setup script):
 - numpy, pandas, scikit-learn: Used by SparkML internally
 - pymongo: For training script to read from MongoDB
+
+## Files Organization
+
+**Essential Files:**
+- `README.md`: Project overview and quick start
+- `INSTRUCTIONS.md`: Step-by-step presentation guide
+- `COMMANDS.md`: Command reference
+- `CLAUDE.md`: This file - comprehensive guide for Claude Code
+
+**Code Files:**
+- `producer.py`: Kafka producer
+- `spark-processor.py`: Basic Spark processor
+- `spark-processor-ml.py`: ML-enabled processor
+- `train_model.py`: Model training script
+- `check-mongodb.py`: MongoDB monitoring
+- `check_ml_predictions.py`: ML prediction monitoring
+
+**Configuration:**
+- `docker-compose.yml`: Service definitions
+- `justfile`: Task runner commands
+- `requirements.txt`: Python dependencies
+- `.env`: Environment variables (not in git)
+
+**Scripts:**
+- `setup-spark-dependencies.sh`: Install ML libs in Spark container
+- `start-spark-processor.sh`: Start basic processor
+- `start-spark-ml.sh`: Start ML processor
+- `train-model.sh`: Train model
