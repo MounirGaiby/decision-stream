@@ -9,6 +9,35 @@ services:
     environment:
       DOZZLE_LEVEL: info
 
+  # MongoDB - Stockage des données
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: fraud_detection
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    command: mongod --bind_ip_all
+
+  # Mongo Express - Interface Web pour MongoDB (optionnel)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    depends_on:
+      - mongodb
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: admin123
+      ME_CONFIG_MONGODB_URL: mongodb://admin:admin123@mongodb:27017/
+      ME_CONFIG_BASICAUTH: false
+
   kafka:
     image: apache/kafka:latest
     container_name: kafka
@@ -34,13 +63,14 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
 
-    # 4. Spark (The Processor)
+  # Spark (The Processor)
   spark:
     image: apache/spark:3.5.0
     container_name: spark
-    user: root # Run as root to avoid permission issues with mounted volumes on dev
+    user: root
     depends_on:
       - kafka
+      - mongodb
     environment:
       - SPARK_MODE=master
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
@@ -48,10 +78,8 @@ services:
       - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
       - SPARK_SSL_ENABLED=no
     volumes:
-      # Mount your current code folder into Spark so it can find 'spark_processor.py'
       - .:/app
     working_dir: /app
-    # We keep the container alive so we can submit jobs to it manually or auto-run
     command: tail -f /dev/null
 
   producer:
@@ -60,12 +88,12 @@ services:
     depends_on:
       - kafka
     restart: always
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: 'kafka:29092'
-      KAFKA_TOPIC: "fraud-detection-stream"
-      # Tell Python to save the DB inside the mounted folder
-      STATE_FILE: "/app/state/producer_state.db" 
+    env_file:
+      - .env
     volumes:
-      # Mount the FOLDER, not the file
       - ./state:/app/state 
       - ~/.cache/kagglehub:/root/.cache/kagglehub
+
+volumes:
+  mongodb_data:
+  mongodb_config:
