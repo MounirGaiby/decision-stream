@@ -7,6 +7,7 @@ from dagster import Definitions
 
 from .assets import (
     start_docker_services_asset,
+    install_dependencies_asset,
     check_services_asset,
     accumulate_data_asset,
     train_models_asset,
@@ -27,6 +28,7 @@ from .resources import docker_resource, mongodb_resource
 defs = Definitions(
     assets=[
         start_docker_services_asset,
+        install_dependencies_asset,
         check_services_asset,
         accumulate_data_asset,
         train_models_asset,

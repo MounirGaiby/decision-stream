@@ -61,9 +61,64 @@ def start_docker_services_asset(context: AssetExecutionContext) -> Output[dict]:
 
 
 @asset(
-    description="Check that all required Docker services are running",
+    description="Install Python ML dependencies in Spark container",
     group_name="infrastructure",
     deps=[start_docker_services_asset],
+)
+def install_dependencies_asset(context: AssetExecutionContext) -> Output[dict]:
+    """Install required Python packages in Spark container for ML"""
+
+    context.log.info("Installing Python dependencies in Spark container...")
+    context.log.info("This may take 3-5 minutes...")
+
+    try:
+        # Install dependencies as root user
+        result = subprocess.run(
+            [
+                "docker", "exec", "-u", "root", "spark", "bash", "-c",
+                "apt-get update && apt-get install -y python3-pip && "
+                "python3 -m pip install --upgrade pip && "
+                "pip3 install numpy pandas scikit-learn pymongo"
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=600  # 10 minutes max
+        )
+
+        context.log.info("Dependencies installed successfully!")
+
+        # Verify installations
+        verify_result = subprocess.run(
+            ["docker", "exec", "spark", "python3", "-c",
+             "import numpy, pandas, sklearn, pymongo; print('All imports successful')"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        context.log.info(f"Verification: {verify_result.stdout}")
+
+        return Output(
+            {"status": "installed", "packages": ["numpy", "pandas", "scikit-learn", "pymongo"]},
+            metadata={
+                "packages_installed": 4,
+                "installation_time": "3-5 minutes"
+            }
+        )
+
+    except subprocess.CalledProcessError as e:
+        context.log.error(f"Failed to install dependencies: {e.stderr}")
+        raise Exception(f"Dependency installation failed: {e.stderr}")
+    except subprocess.TimeoutExpired:
+        context.log.error("Installation timed out after 10 minutes")
+        raise Exception("Dependency installation timed out")
+
+
+@asset(
+    description="Check that all required Docker services are running",
+    group_name="infrastructure",
+    deps=[install_dependencies_asset],
 )
 def check_services_asset(context: AssetExecutionContext, docker: DockerResource) -> Output[dict]:
     """Verify all Docker services are running"""

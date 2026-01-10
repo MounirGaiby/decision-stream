@@ -10,36 +10,39 @@
 ### La Veille
 
 ```bash
-# 1. Vérifier Docker
+# 1. Vérifier Docker Desktop est lancé
 docker ps
 
-# 2. Vérifier Python et just
+# 2. Vérifier Python et Dagster
 python3 --version  # 3.9+
-just --version
+source venv/bin/activate
+dagster --version
 
-# 3. Setup complet
-just setup
-
-# 4. Test rapide Dagster
+# 3. Test Dagster UI
 just dagster
 # → Ouvrir http://localhost:3000
-# → Vérifier que l'interface charge
+# → Vérifier que l'interface charge avec 8 assets
+
+# 4. Test pipeline complet (optionnel - prend 25 min)
+# Dans Dagster UI: Jobs → full_pipeline → Launch Run
+# Vérifier que tout fonctionne
 
 # 5. Nettoyer pour démo fraîche
 just clean
 ```
 
-### Le Jour Même (30 min avant)
+### Le Jour Même (Juste avant)
 
 ```bash
-# Reset complet pour démo propre
+# 1. Clean start (supprime tout)
 just clean
-just setup
 
-# Préparer Dagster (ne pas fermer ce terminal)
+# 2. Lancer Dagster UI
 just dagster
-
 # → http://localhost:3000 doit être accessible
+
+# 3. Ne lancez PAS le pipeline encore!
+# Vous le ferez en live pendant la présentation
 ```
 
 ---
@@ -89,22 +92,24 @@ Dataset Kaggle → Producer → Kafka → Spark → MongoDB → Tableau
 **Ce que vous montrez:**
 
 ```
-start_docker_services  →  check_services  →  accumulate_data  →
-train_models  →  run_ml_predictions  →  validate_data  →  export_to_excel
+start_docker_services  →  install_dependencies  →  check_services  →
+accumulate_data  →  train_models  →  run_ml_predictions  →
+validate_data  →  export_to_excel
 ```
 
 **Ce que vous dites:**
 
-> "Le pipeline se compose de 7 étapes automatisées:
-> 1. **start_docker_services**: Lance Kafka, MongoDB, Spark automatiquement
-> 2. **check_services**: Vérifie que tout est prêt
-> 3. **accumulate_data**: Collecte 2 minutes de transactions depuis Kafka
-> 4. **train_models**: Entraîne nos 3 modèles ML en parallèle
-> 5. **run_ml_predictions**: Applique les modèles et fait du vote majoritaire
-> 6. **validate_data**: Vérifie la qualité (accuracy, précision)
-> 7. **export_to_excel**: Exporte tout pour Tableau
+> "Le pipeline se compose de 8 étapes entièrement automatisées:
+> 1. **start_docker_services**: Lance Kafka, MongoDB, Spark avec docker-compose
+> 2. **install_dependencies**: Installe NumPy, Pandas, Scikit-learn dans Spark (3-5 min)
+> 3. **check_services**: Vérifie que tous les services sont prêts
+> 4. **accumulate_data**: Collecte 2 minutes de transactions depuis Kafka
+> 5. **train_models**: Entraîne nos 3 modèles ML en parallèle (Random Forest, Gradient Boosting, Logistic Regression)
+> 6. **run_ml_predictions**: Applique les modèles et fait du vote majoritaire
+> 7. **validate_data**: Vérifie la qualité (accuracy >99%, précision, recall)
+> 8. **export_to_excel**: Exporte tout vers Excel pour analyse Tableau
 >
-> Dagster gère les dépendances: impossible d'entraîner sans données, impossible de prédire sans modèles."
+> Dagster gère automatiquement les dépendances: impossible d'entraîner sans données, impossible de prédire sans modèles. Tout est reproductible."
 
 #### C. Lancer le Pipeline (5 min)
 
@@ -121,23 +126,30 @@ train_models  →  run_ml_predictions  →  validate_data  →  export_to_excel
 **Pendant l'exécution:**
 
 **~30 secondes:** start_docker_services
-> "Dagster démarre automatiquement tous les services Docker. Plus besoin de le faire manuellement."
+> "Dagster lance automatiquement docker-compose. Tous les services démarrent: Kafka, MongoDB, Spark, monitoring."
 
-**~30 secondes:** check_services
-> "Vérification que Kafka, MongoDB, et Spark sont bien démarrés."
+**~3-5 minutes:** install_dependencies
+> "Installation de NumPy, Pandas, Scikit-learn dans le container Spark. C'est fait une seule fois - les prochains runs seront plus rapides."
+
+**~10 secondes:** check_services
+> "Vérification que tous les services sont opérationnels avant de continuer."
 
 **~2 minutes:** accumulate_data
-> "Collecte de transactions. Dans une vraie utilisation, on laisserait tourner plus longtemps pour avoir plus de données."
+> "Collecte de transactions depuis Kafka, traitement avec Spark, stockage MongoDB. En production, on accumulerait plus longtemps."
 
-**~10-15 minutes:** train_models (si le temps le permet, sinon passez)
-> "Entraînement des 3 modèles. C'est la partie la plus longue. Vous pouvez voir les logs en temps réel ici..."
+**~10-15 minutes:** train_models (partie la plus longue)
+> "Entraînement des 3 modèles ML en parallèle. Chaque modèle apprend sur ~1000-2000 transactions."
+
+**~2 minutes:** run_ml_predictions
+> "Application des 3 modèles, vote majoritaire, auto-flagging des cas à haut risque."
+
+**~30 secondes:** validate_data + export_to_excel
+> "Validation qualité et export Excel. Système maintenant prêt pour Tableau."
 
 **(Optionnel) Si le training prend trop de temps:**
-- Cliquez sur l'asset en cours
-- Montrez les logs qui défilent
-- Expliquez que c'est normal et qu'on va utiliser des modèles pré-entraînés
-
-**Astuce:** Si vous avez peu de temps, utilisez le job "validate_data" seul au lieu de "full_pipeline" pour montrer rapidement Dagster.
+- Montrez les logs en temps réel
+- Expliquez les métriques (accuracy, precision, recall)
+- Ou utilisez le job "validate_data" seul pour démo rapide
 
 ---
 

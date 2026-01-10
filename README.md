@@ -35,16 +35,16 @@ Producer Python → Kafka → Spark Streaming → MongoDB (4 collections) → Ex
 
 ---
 
-## 🚀 Démarrage Rapide (5 Minutes)
+## 🚀 Démarrage Rapide (2 Minutes)
 
 ### Prérequis
 
-- Docker Desktop installé et démarré
-- Python 3.9+ avec pip
-- Compte Kaggle (pour le dataset)
-- Just installé: `brew install just` (macOS) ou [voir installation](https://github.com/casey/just#installation)
+- **Docker Desktop** installé et démarré
+- **Python 3.9+** avec pip
+- **Compte Kaggle** (pour le dataset)
+- **Just** installé: `brew install just` (macOS) ou [voir installation](https://github.com/casey/just#installation)
 
-### Configuration Initiale
+### Configuration en 3 Étapes
 
 **1. Configuration Kaggle**
 
@@ -58,43 +58,43 @@ STATE_FILE=/app/state/producer_state.db
 
 > **Obtenir votre token:** [Kaggle Settings](https://www.kaggle.com/settings) → API → Create New API Token
 
-**2. Installation des Dépendances**
+**2. Installer Dagster (Python)**
 
 ```bash
-# Créer environnement virtuel Python
+# Créer environnement virtuel
 python3 -m venv venv
 source venv/bin/activate  # macOS/Linux
 # ou: venv\Scripts\activate.ps1  # Windows
 
-# Installer dépendances Python
+# Installer Dagster
 pip install -r requirements.txt
-
-# Démarrer Docker et installer dépendances Spark
-just setup
 ```
 
-**3. Lancer Dagster UI**
+**3. Lancer Dagster et Exécuter le Pipeline**
 
 ```bash
+# Démarrer Dagster UI
 just dagster
-# Ouvre automatiquement http://localhost:3000
+# → Ouvre http://localhost:3000
 ```
 
-**4. Exécuter le Pipeline Complet**
-
-Dans l'interface Dagster (http://localhost:3000):
+Dans l'interface Dagster:
 1. Cliquez sur **"Jobs"** dans le menu gauche
 2. Sélectionnez **"full_pipeline"**
 3. Cliquez sur **"Launchpad"**
 4. Cliquez sur **"Launch Run"**
 
-✅ **C'est tout!** Le système exécute automatiquement:
-- Démarrage des services Docker
-- Accumulation de données d'entraînement (2 min)
-- Entraînement des 3 modèles ML (~10-15 min)
-- Génération de prédictions en temps réel (2 min)
-- Validation de la qualité des données
-- Export vers Excel pour Tableau
+✅ **C'est tout!** Dagster exécute automatiquement:
+- ⚡ Démarrage des services Docker (30s)
+- 📦 Installation dépendances Spark (3-5 min)
+- ✅ Vérification services
+- 📊 Accumulation de données d'entraînement (2 min)
+- 🎓 Entraînement des 3 modèles ML (10-15 min)
+- 🤖 Génération de prédictions en temps réel (2 min)
+- ✔️ Validation de la qualité des données (30s)
+- 📁 Export vers Excel pour Tableau (30s)
+
+**Total:** ~20-25 minutes pour le premier run (dont 3-5 min installation)
 
 ---
 
@@ -117,14 +117,16 @@ Dans l'interface Dagster (http://localhost:3000):
 - ✅ Progression en temps réel
 - ✅ Workflows reproductibles
 
-### Assets Disponibles (7 étapes)
+### Assets Disponibles (8 étapes)
 
-Le pipeline complet est composé de 7 assets avec dépendances automatiques:
+Le pipeline complet est composé de 8 assets avec dépendances automatiques:
 
 ```
-start_docker_services
+start_docker_services (30s)
         ↓
-check_services
+install_dependencies (3-5 min)
+        ↓
+check_services (10s)
         ↓
 accumulate_data (2 min)
         ↓
@@ -327,23 +329,20 @@ Le système génère automatiquement 4 fichiers Excel (dossier `exports/`):
 
 ## 🛠️ Commandes Utiles
 
-### Infrastructure
-
-```bash
-just setup          # Configuration initiale complète
-just start          # Démarrer Docker services
-just stop           # Arrêter Docker services
-just restart        # Redémarrer services
-just health         # Vérifier état du système
-```
-
-### Dagster
+### Dagster (Interface Principale)
 
 ```bash
 just dagster        # Lancer Dagster UI (http://localhost:3000)
 ```
 
-Tous les workflows (accumulation, entraînement, prédictions, validation, export) se font maintenant via l'interface Dagster UI.
+**Tous les workflows sont maintenant dans Dagster UI:**
+- Démarrage Docker
+- Installation dépendances
+- Accumulation données
+- Entraînement modèles
+- Prédictions ML
+- Validation
+- Export Excel
 
 ### Monitoring
 
@@ -387,8 +386,9 @@ just disk-usage     # Utilisation disque Docker
 ### Première Utilisation
 
 ```bash
-# 1. Setup (une seule fois)
-just setup
+# 1. Installer Dagster (une seule fois)
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
 
 # 2. Lancer Dagster
 just dagster
@@ -396,7 +396,10 @@ just dagster
 # 3. Dans Dagster UI (http://localhost:3000)
 #    Jobs → full_pipeline → Launch Run
 
-# 4. Attendre 15-20 minutes (tout est automatique)
+# 4. Attendre ~25 minutes (tout est automatique)
+#    - Docker démarre (30s)
+#    - Installation Spark (3-5 min)
+#    - Accumulation + Training + Prédictions (~20 min)
 
 # 5. Résultats dans exports/ (Excel pour Tableau)
 ```
