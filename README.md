@@ -1,106 +1,54 @@
 # 🔍 Système de Détection de Fraude en Temps Réel
 
-Projet réalisé dans le cadre du module **Processus Décisionnel Big Data**.
+**Projet Big Data - Processus Décisionnel**
 
-Système complet de détection de fraude bancaire utilisant Machine Learning et traitement en temps réel.
-
-## 🖥️ Support Multi-Plateforme
-
-Ce projet fonctionne sur **Windows**, **macOS** et **Linux** :
-- Scripts PowerShell (`.ps1`) pour Windows
-- Scripts Bash (`.sh`) pour macOS et Linux
-- Tous les scripts Docker et Python fonctionnent de manière identique sur toutes les plateformes
-
-## 🚀 Task Runners - Méthode Recommandée
-
-Pour une utilisation plus simple et reproductible, utilisez les task runners :
-
-**Recommandé - `just` (moderne, simple):**
-```bash
-brew install just           # Installation (macOS)
-just --list                 # Voir toutes les commandes
-just setup                  # Configuration complète
-just run-basic              # Démarrer sans ML
-just train                  # Entraîner le modèle
-just run-ml                 # Démarrer avec ML
-just health                 # Vérifier l'état du système
-```
-
-**Alternative - `make` (traditionnel, universel):**
-```bash
-make help                   # Voir toutes les commandes
-make setup                  # Configuration complète
-make run-basic              # Démarrer sans ML
-make train                  # Entraîner le modèle
-make run-ml                 # Démarrer avec ML
-make health                 # Vérifier l'état du système
-```
-
-📖 **Guide complet:** Voir [TASK_RUNNERS.md](TASK_RUNNERS.md)
+Système complet de détection de fraude bancaire utilisant Machine Learning (3 modèles en ensemble) et traitement en temps réel avec orchestration Dagster.
 
 ---
 
-## 📊 Architecture Complète
+## 📊 Architecture
 
 ```
-Dataset Kaggle
-    ↓
-Producer (Python) → Kafka → Spark Streaming → MongoDB → Tableau
-                                ↓
-                         SparkML (3 Models: Random Forest, Gradient Boosting, Logistic Regression)
-                                ↓
-                    Prédictions temps réel
+Dataset Kaggle (284K transactions)
+        ↓
+Producer Python → Kafka → Spark Streaming → MongoDB (4 collections) → Export Excel
+                             ↓
+                    SparkML Ensemble (3 modèles)
+                    - Random Forest
+                    - Gradient Boosting
+                    - Logistic Regression
+                             ↓
+                    Vote Majoritaire + Auto-flagging
 ```
 
-### Composants du Système
+### Pile Technologique
 
 | Composant | Technologie | Rôle |
 |-----------|-------------|------|
-| **Ingestion** | Kafka | Streaming des transactions en temps réel |
-| **Traitement** | Spark Streaming | Traitement et transformation des données |
-| **ML** | SparkML (3 Models Ensemble) | Détection de fraude par Machine Learning avec 3 modèles |
-| **Stockage** | MongoDB | Base de données NoSQL pour persistance |
-| **Visualisation** | Tableau | Dashboards et analyses visuelles |
-| **Monitoring** | Dozzle, Mongo Express | Surveillance système et données |
+| **Orchestration** | Dagster | Interface visuelle pour gérer tout le pipeline |
+| **Streaming** | Apache Kafka | Ingestion temps réel des transactions |
+| **Traitement** | Apache Spark | Traitement distribué et ML |
+| **ML** | SparkML | 3 modèles en ensemble (vote majoritaire) |
+| **Stockage** | MongoDB | Base NoSQL (4 collections) |
+| **Visualisation** | Tableau | Dashboards et analyses |
+| **Monitoring** | Dozzle, Mongo Express | Surveillance système |
 
 ---
 
-## 🚀 Installation et Démarrage
+## 🚀 Démarrage Rapide (5 Minutes)
 
 ### Prérequis
 
 - Docker Desktop installé et démarré
-- Python 3.9+ installé
+- Python 3.9+ avec pip
 - Compte Kaggle (pour le dataset)
-- **Recommandé**: `just` ou `make` (task runners)
-- **Alternative**:
-  - **Windows**: PowerShell
-  - **macOS/Linux**: Bash (inclus par défaut)
+- Just installé: `brew install just` (macOS) ou [voir installation](https://github.com/casey/just#installation)
 
-### Installation de `just` (Recommandé)
+### Configuration Initiale
 
-```bash
-# macOS
-brew install just
+**1. Configuration Kaggle**
 
-# Linux
-cargo install just
-
-# Windows
-cargo install just
-# ou
-scoop install just
-```
-
-> **Note**: Si vous préférez ne pas installer `just`, vous pouvez utiliser `make` (pré-installé sur macOS/Linux) ou les scripts directs (`.sh`/`.ps1`)
-
-### Étape 1 : Configuration Kaggle
-
-1. Créez un compte sur [Kaggle](https://www.kaggle.com)
-2. Allez dans Settings → API → Create New API Token
-3. Notez votre token (format : `KGAT_xxxxx...`)
-4. Créez un fichier `.env` à la racine :
-
+Créez un fichier `.env` à la racine:
 ```env
 KAGGLE_API_TOKEN=KGAT_votre_token_ici
 KAFKA_BOOTSTRAP_SERVERS=kafka:29092
@@ -108,429 +56,412 @@ KAFKA_TOPIC=fraud-detection-stream
 STATE_FILE=/app/state/producer_state.db
 ```
 
-### Étape 2 : Démarrage de l'Infrastructure
+> **Obtenir votre token:** [Kaggle Settings](https://www.kaggle.com/settings) → API → Create New API Token
 
-**Méthode recommandée (avec task runner):**
-```bash
-# Avec just (recommandé)
-just start
-
-# Avec make (alternative)
-make start
-```
-
-**Méthode manuelle (avec Docker):**
-```bash
-# Démarrer tous les services Docker
-docker-compose up -d
-
-# Vérifier que tous les containers sont UP (6 containers)
-docker ps
-```
-
-**Services disponibles :**
-- Kafka : `localhost:9092`
-- MongoDB : `localhost:27017`
-- Mongo Express : `http://localhost:8081`
-- Dozzle (logs) : `http://localhost:8080`
-
-### Étape 3 : Installation des Dépendances Python (Spark)
-
-**Méthode recommandée (task runner):**
-```bash
-# Avec just (recommandé)
-just install-deps
-
-# Avec make (alternative)
-make install-deps
-```
-
-**Méthode manuelle (scripts directs):**
-```powershell
-# Windows (PowerShell)
-.\setup-spark-dependencies.ps1
-```
-```bash
-# macOS/Linux (Bash)
-./setup-spark-dependencies.sh
-```
-
-**Durée :** 3-5 minutes
-
-
-## 🔄 Workflow Complet
-
-### 🎯 Workflow Rapide (avec Task Runners)
+**2. Installation des Dépendances**
 
 ```bash
-# Configuration initiale (une seule fois)
-just setup                  # ou: make setup
+# Créer environnement virtuel Python
+python3 -m venv venv
+source venv/bin/activate  # macOS/Linux
+# ou: venv\Scripts\activate.ps1  # Windows
 
-# Phase 1: Accumuler des données (5-10 minutes)
-just run-basic              # ou: make run-basic
+# Installer dépendances Python
+pip install -r requirements.txt
 
-# Vérifier les données (autre terminal)
-just check                  # ou: make check
-
-# Phase 2: Entraîner le modèle (arrêter run-basic avec Ctrl+C d'abord)
-just train                  # ou: make train
-
-# Phase 3: Exécuter avec ML
-just run-ml                 # ou: make run-ml
-
-# Vérifier les prédictions
-just check-ml               # ou: make check-ml
-
-# État du système
-just health                 # ou: make health
+# Démarrer Docker et installer dépendances Spark
+just setup
 ```
 
-### 📝 Workflow Détaillé (méthode manuelle)
+**3. Lancer Dagster UI**
 
-### Phase 1 : Traitement Sans ML (Accumulation de données)
-
-**Avec task runners (recommandé):**
 ```bash
-just run-basic              # ou: make run-basic
+just dagster
+# Ouvre automatiquement http://localhost:3000
 ```
 
-**Avec scripts (alternative):**
-```powershell
-# Windows (PowerShell)
-.\start-spark-processor.ps1
-```
-```bash
-# macOS/Linux (Bash)
-./start-spark-processor.sh
-```
+**4. Exécuter le Pipeline Complet**
 
-**Laisser tourner 5-10 minutes** pour accumuler ~5000 transactions.
+Dans l'interface Dagster (http://localhost:3000):
+1. Cliquez sur **"Jobs"** dans le menu gauche
+2. Sélectionnez **"full_pipeline"**
+3. Cliquez sur **"Launchpad"**
+4. Cliquez sur **"Launch Run"**
 
-**Vérification:**
-```bash
-# Avec task runner
-just check                  # ou: make check
-
-# Avec Python direct
-python check-mongodb.py
-```
-
-### Phase 2 : Entraînement du Modèle ML
-
-**Avec task runners (recommandé):**
-```bash
-# 1. Arrêter le processeur Spark (Ctrl+C dans le terminal)
-
-# 2. Entraîner les modèles ML (3 modèles)
-just train                  # ou: make train
-```
-
-**Avec scripts (alternative):**
-```powershell
-# Windows (PowerShell)
-.\train-model.ps1
-```
-```bash
-# macOS/Linux (Bash)
-./train-model.sh
-```
-
-**Durée :** 5-10 minutes
-
-**Résultat attendu :**
-```
-📈 Dataset Statistics:
-   Total transactions: 5000+
-   Normal transactions: 4990+ (99.X%)
-   Fraudulent transactions: 10+ (0.X%)
-
-🌲 Training ML Models (Random Forest, Gradient Boosting, Logistic Regression)...
-   ✅ All 3 models trained successfully!
-
-📈 MODEL PERFORMANCE METRICS
-   AUC-ROC:   0.98+
-   Accuracy:  0.99+
-   Precision: 0.99+
-   Recall:    0.99+
-   F1-Score:  0.99+
-
-💾 Model saved to: /app/models/fraud_detection_model
-```
-
-### Phase 3 : Prédictions en Temps Réel
-
-**Avec task runners (recommandé):**
-```bash
-just run-ml                 # ou: make run-ml
-```
-
-**Avec scripts (alternative):**
-```powershell
-# Windows (PowerShell)
-.\start-spark-ml.ps1
-```
-```bash
-# macOS/Linux (Bash)
-./start-spark-ml.sh
-```
-
-**Le système va maintenant :**
-- Lire les transactions depuis Kafka
-- Faire des prédictions en temps réel
-- Ajouter `fraud_prediction` et `fraud_probability` dans MongoDB
-
-**Vérification des prédictions:**
-```bash
-# Avec task runner
-just check-ml               # ou: make check-ml
-
-# Avec Python direct
-python check_ml_predictions.py
-```
-
-**Résultat attendu :**
-```
-🤖 ML PREDICTIONS - MongoDB Statistics
-================================
-📈 Total transactions: 7000+
-🤖 Transactions with ML predictions: 3500+
-
-📈 Model Performance:
-   Accuracy: 99.X%
-   Precision: 100.00%
-   Recall: 100.00%
-
-📊 Confusion Matrix:
-   True Positives (Fraud detected): X
-   False Positives (False alarm): X
-   True Negatives (Normal detected): X
-   False Negatives (Fraud missed): X
-```
-
+✅ **C'est tout!** Le système exécute automatiquement:
+- Démarrage des services Docker
+- Accumulation de données d'entraînement (2 min)
+- Entraînement des 3 modèles ML (~10-15 min)
+- Génération de prédictions en temps réel (2 min)
+- Validation de la qualité des données
+- Export vers Excel pour Tableau
 
 ---
 
-## 🎭 Orchestration avec Dagster (Recommandé)
+## 🎭 Orchestration avec Dagster
 
-### Nouvelle Méthode : Interface Visuelle
+### Pourquoi Dagster?
 
-Dagster fournit une interface web pour orchestrer tout le pipeline avec des visuels, logs centralisés, et exécution simplifiée.
+**Avant Dagster (Scripts Manuels):**
+- ❌ 8+ commandes à exécuter manuellement
+- ❌ Risque d'oublier une étape
+- ❌ Pas de visibilité sur la progression
+- ❌ Logs dispersés dans plusieurs terminaux
+- ❌ Difficile de reproduire exactement
 
-**Avantages:**
-- ✅ Exécution en un clic de tout le workflow
-- ✅ Suivi visuel de la progression en temps réel
-- ✅ Gestion automatique des dépendances (impossible d'entraîner sans données)
-- ✅ Logs centralisés pour tous les composants
-- ✅ Métriques et métadonnées pour chaque étape
-- ✅ Exécution sélective (lancer uniquement ce dont vous avez besoin)
+**Avec Dagster:**
+- ✅ Interface web professionnelle
+- ✅ Exécution en un clic
+- ✅ Dépendances automatiques (impossible d'entraîner sans données)
+- ✅ Logs centralisés avec métadonnées
+- ✅ Progression en temps réel
+- ✅ Workflows reproductibles
 
-### Démarrage Rapide
+### Assets Disponibles (7 étapes)
 
-```bash
-# 1. Démarrer l'interface Dagster
-just dagster
+Le pipeline complet est composé de 7 assets avec dépendances automatiques:
 
-# 2. Ouvrir dans le navigateur
-# http://localhost:3000
-
-# 3. Lancer le pipeline complet
-# Jobs → full_pipeline → Launch Run
-
-# C'est tout! Le système exécute automatiquement:
-# accumulation → entraînement → prédictions → validation → export
 ```
+start_docker_services
+        ↓
+check_services
+        ↓
+accumulate_data (2 min)
+        ↓
+train_models (10-15 min)
+        ↓
+run_ml_predictions (2 min)
+        ↓
+validate_data (30s)
+        ↓
+export_to_excel (30s)
+```
+
+**Chaque asset génère des métadonnées:**
+- Nombre de transactions traitées
+- Accuracy des modèles (>99%)
+- Transactions flaggées (haut risque)
+- Temps d'exécution
 
 ### Jobs Disponibles
 
-| Job | Description | Durée |
-|-----|-------------|-------|
-| **full_pipeline** | Workflow complet de A à Z | ~15-20 min |
-| **accumulate_data** | Collecter des données d'entraînement | ~2-3 min |
-| **train_models** | Entraîner les 3 modèles ML | ~10-15 min |
-| **run_ml_predictions** | Générer des prédictions en temps réel | ~2-3 min |
-| **validate_data** | Valider la qualité des données et modèles | ~30 sec |
-
-### Assets et Dépendances
-
-```
-check_services → accumulate_data → train_models → run_ml_predictions → validate_data → export_to_excel
-```
-
-📖 **Guide complet:** Voir [DAGSTER.md](docs/DAGSTER.md) pour:
-- Descriptions détaillées de chaque asset
-- Monitoring et logs
-- Troubleshooting
-- Guide pour présentations
-
----
-
-## 📊 Dataset
-
-**Credit Card Fraud Detection** (Kaggle)
-- Source : [Kaggle Dataset](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)
-- 284,807 transactions
-- 492 fraudes (0.172%)
-- 31 features : Time, V1-V28 (PCA), Amount, Class
-
-### Schéma des Données
-
-**Dans Kafka/MongoDB :**
-```json
-{
-  "Time": 0.0,
-  "V1": -1.359807,
-  "V2": -0.072781,
-  ...
-  "V28": -0.021053,
-  "Amount": 149.62,
-  "Class": 0.0,
-  "processed_at": "2026-01-09T14:30:45.123Z"
-}
-```
-
-**Avec Prédictions ML :**
-```json
-{
-  "Time": 0.0,
-  "V1": -1.359807,
-  ...
-  "Amount": 149.62,
-  "Class": 0.0,
-  "fraud_prediction": 0,
-  "fraud_probability": 0.02,
-  "processed_at": "2026-01-09T14:30:45.123Z"
-}
-```
-
----
-
-## 🤖 Machine Learning
-
-### Algorithmes : Ensemble de 3 Modèles
-
-**Modèles utilisés :**
-1. **Random Forest Classifier**
-   - Nombre d'arbres : 100
-   - Profondeur maximale : 10
-2. **Gradient Boosting Trees**
-   - Nombre d'itérations : 50
-   - Profondeur maximale : 5
-3. **Logistic Regression**
-   - Nombre d'itérations : 100
-   - Régularisation : 0.01
-
-**Configuration commune :**
-- Features : V1-V28 + Amount (29 features)
-- Normalisation : StandardScaler
-- Split : 80% train / 20% test
-- Prédiction finale : Vote majoritaire des 3 modèles
-
-### Métriques de Performance
-
-**Résultats typiques :**
-- **AUC-ROC :** 0.98+ (excellente séparation des classes)
-- **Accuracy :** 99%+ (très peu d'erreurs)
-- **Precision :** 80-100% (peu de fausses alertes)
-- **Recall :** 80-100% (peu de fraudes manquées)
-- **F1-Score :** 0.99+ (bon équilibre)
-
-### Feature Importance
-
-Les 10 features les plus importantes (typiquement) :
-1. V14, V12, V10 (composantes PCA liées au comportement)
-2. Amount (montant de la transaction)
-3. V17, V16, V18
-4. Time (moment de la transaction)
-
----
-
-## 📈 Monitoring et Vérification
+| Job | Description | Durée | Utilisation |
+|-----|-------------|-------|-------------|
+| **full_pipeline** | Workflow complet de A à Z | 15-20 min | Première fois, démo complète |
+| **accumulate_data** | Collecter données d'entraînement | 2-3 min | Besoin de plus de données |
+| **train_models** | Réentraîner les 3 modèles | 10-15 min | Après ajout de données |
+| **run_ml_predictions** | Générer prédictions temps réel | 2-3 min | Tester les modèles |
+| **validate_data** | Vérifier qualité et accuracy | 30s | Health check rapide |
 
 ### Interfaces Web
 
+Une fois Dagster lancé (`just dagster`):
+
 | Interface | URL | Description |
 |-----------|-----|-------------|
-| Dozzle | `http://localhost:8080` | Logs Docker en temps réel |
-| Mongo Express | `http://localhost:8081` | Interface MongoDB |
+| **Dagster UI** | http://localhost:3000 | Orchestration principale |
+| **Mongo Express** | http://localhost:8081 | Navigateur de données MongoDB |
+| **Dozzle** | http://localhost:8080 | Logs Docker temps réel |
 
-### Scripts de Vérification
+---
 
-```bash
-# Vérifier les données dans MongoDB
-python check-mongodb.py
+## 🤖 Machine Learning - Approche Ensemble
 
-# Vérifier les prédictions ML
-python check_ml_predictions.py
+### Dataset: Credit Card Fraud Detection (Kaggle)
 
-# Voir les logs
-docker logs producer --tail 50
-docker logs spark --tail 50
-docker logs mongodb --tail 50
+- **Source:** [Kaggle Dataset](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)
+- **Taille:** 284,807 transactions
+- **Fraudes:** 492 cas (0.172% - très déséquilibré)
+- **Features:** 31 colonnes
+  - `Time`: Secondes depuis la première transaction
+  - `V1-V28`: 28 composantes PCA (anonymisation)
+  - `Amount`: Montant de la transaction
+  - `Class`: 0 (normal) ou 1 (fraude)
+
+### 3 Modèles Complémentaires
+
+**1. Random Forest Classifier**
+- 100 arbres de décision
+- Profondeur maximale: 10
+- Excellent pour capturer les interactions non-linéaires
+
+**2. Gradient Boosting Trees**
+- 50 itérations
+- Profondeur maximale: 5
+- Très performant sur classes déséquilibrées
+
+**3. Logistic Regression**
+- 100 itérations
+- Régularisation: 0.01
+- Baseline interprétable
+
+### Stratégie Ensemble: Vote Majoritaire
+
+```python
+# Pour chaque transaction:
+vote_rf = model_random_forest.predict(transaction)
+vote_gb = model_gradient_boosting.predict(transaction)
+vote_lr = model_logistic_regression.predict(transaction)
+
+# Décision finale
+final_prediction = majority_vote(vote_rf, vote_gb, vote_lr)
+confidence = average(prob_rf, prob_gb, prob_lr)
+
+# Auto-flagging (action immédiate requise)
+if confidence > 0.80 or (vote_rf == vote_gb == vote_lr == 1):
+    flag_transaction(transaction)
 ```
 
-### Benchmark et Performance
+**Avantages:**
+- **Robustesse:** Un modèle seul peut se tromper, 3 modèles d'accord = haute confiance
+- **Réduction faux positifs:** Unanimité ou haute probabilité requise pour flagging
+- **Performance:** Accuracy >99%, Precision >90%, Recall >85%
 
-```bash
-# Benchmark complet (mesure tout: throughput, latence, ML, système)
-just benchmark
+### Métriques de Performance
 
-# Benchmark rapide (statistiques rapides)
-just benchmark-quick
+**Résultats typiques après entraînement:**
+- **AUC-ROC:** 0.98+ (excellente séparation des classes)
+- **Accuracy:** 99%+ (très peu d'erreurs)
+- **Precision:** 90-100% (peu de fausses alarmes)
+- **Recall:** 85-95% (peu de fraudes manquées)
+- **F1-Score:** 0.95+ (bon équilibre)
 
-# Mesure de throughput uniquement (durée personnalisée)
-just benchmark-throughput duration=120
+---
+
+## 🗄️ Base de Données MongoDB
+
+### Structure: 4 Collections
+
+**1. `transactions`** - Toutes les transactions brutes
+```json
+{
+  "Time": 0.0,
+  "V1": -1.359, "V2": -0.072, ..., "V28": -0.021,
+  "Amount": 149.62,
+  "Class": 0.0,
+  "processed_at": "2026-01-10T14:30:45Z"
+}
 ```
 
-**Métriques mesurées :**
-- **Throughput** : Transactions par seconde/minute/heure
-- **Latence** : Temps de traitement end-to-end
-- **Performance ML** : Accuracy, Precision, Recall, F1-Score
-- **Performance Base de données** : Temps de requête, index
-- **Ressources système** : CPU, Mémoire, Disque
-- **Distribution des données** : Statistiques sur les montants, classes, temps
-
-📖 **Voir** : [Documentation complète des benchmarks](docs/BENCHMARK.md) pour l'interprétation des résultats et les meilleures pratiques
-
-### 📋 Commandes Rapides par Plateforme
-
-**Windows (PowerShell):**
-```powershell
-.\setup-spark-dependencies.ps1    # Installer dépendances
-.\start-spark-processor.ps1        # Démarrer sans ML
-.\train-model.ps1                  # Entraîner modèle
-.\start-spark-ml.ps1               # Démarrer avec ML
+**2. `model_predictions`** - Prédictions individuelles par modèle
+```json
+{
+  "transaction_id": "...",
+  "model_name": "random_forest",
+  "prediction": 0,
+  "probability": 0.02,
+  "timestamp": "2026-01-10T14:30:46Z"
+}
 ```
 
-**macOS/Linux (Bash):**
+**3. `ensemble_results`** - Décisions finales (vote majoritaire)
+```json
+{
+  "transaction_id": "...",
+  "final_prediction": 0,
+  "confidence_score": 0.03,
+  "model_agreement": true,
+  "votes": {"rf": 0, "gb": 0, "lr": 0},
+  "timestamp": "2026-01-10T14:30:47Z"
+}
+```
+
+**4. `flagged_transactions`** - Cas à haut risque
+```json
+{
+  "transaction_id": "...",
+  "reason": "all_models_agree",
+  "confidence": 0.95,
+  "amount": 5000.00,
+  "flagged_at": "2026-01-10T14:30:47Z",
+  "action_required": true
+}
+```
+
+**Pourquoi 4 collections?**
+- **Traçabilité:** Audit complet de chaque décision
+- **Analytics:** Analyser performance de chaque modèle
+- **Business Intelligence:** Dashboards Tableau détaillés
+- **Actions:** Isoler les cas critiques (flagged)
+
+---
+
+## 📈 Visualisation et Décisions
+
+### Export vers Tableau
+
+Le système génère automatiquement 4 fichiers Excel (dossier `exports/`):
+- `transactions.xlsx` - Toutes les transactions
+- `model_predictions.xlsx` - Prédictions par modèle
+- `ensemble_results.xlsx` - Décisions finales
+- `flagged_transactions.xlsx` - Cas critiques
+
+### Décisions Business Supportées
+
+**1. Blocage Temps Réel**
+- Si transaction flaggée → bloquer immédiatement la carte
+- Réduction pertes financières
+- Notification client pour vérification
+
+**2. Analyse des Patterns**
+- Identifier nouvelles techniques de fraude
+- Montants moyens des fraudes
+- Heures/jours à risque élevé
+- Localisation géographique (si disponible)
+
+**3. Optimisation Modèles**
+- Comparer performance des 3 modèles
+- Identifier faux positifs/négatifs
+- Ajuster seuils de confiance
+- Réentraînement périodique
+
+**4. Reporting et Conformité**
+- Historique complet pour audit
+- Taux de détection par période
+- Coûts évités (fraudes détectées)
+- SLA: latence de détection
+
+📊 **Voir [CHARTS.md](docs/CHARTS.md)** pour le guide complet des visualisations Tableau à créer.
+
+---
+
+## 🛠️ Commandes Utiles
+
+### Infrastructure
+
 ```bash
-./setup-spark-dependencies.sh     # Installer dépendances
-./start-spark-processor.sh         # Démarrer sans ML
-./train-model.sh                   # Entraîner modèle
-./start-spark-ml.sh                # Démarrer avec ML
+just setup          # Configuration initiale complète
+just start          # Démarrer Docker services
+just stop           # Arrêter Docker services
+just restart        # Redémarrer services
+just health         # Vérifier état du système
+```
+
+### Dagster
+
+```bash
+just dagster        # Lancer Dagster UI (http://localhost:3000)
+```
+
+Tous les workflows (accumulation, entraînement, prédictions, validation, export) se font maintenant via l'interface Dagster UI.
+
+### Monitoring
+
+```bash
+just logs           # Voir logs de tous les services
+just log <service>  # Logs d'un service spécifique
+just ui-mongo       # Ouvrir Mongo Express
+just ui-logs        # Ouvrir Dozzle
+```
+
+### Maintenance
+
+```bash
+just clean             # Nettoyer toutes les données (reset complet)
+just clean-checkpoint  # Fixer erreurs Spark
+just reset-producer    # Redémarrer producer depuis le début
+```
+
+### Debug
+
+```bash
+just shell-spark    # Shell dans container Spark
+just shell-mongo    # Shell MongoDB
+just disk-usage     # Utilisation disque Docker
 ```
 
 ---
 
 ## 📚 Documentation
 
-| Document | Description |
-|----------|-------------|
-| [DAGSTER.md](docs/DAGSTER.md) | Guide complet d'orchestration Dagster (interface UI, jobs, assets, monitoring) |
-| [DATABASE_STRUCTURE.md](docs/DATABASE_STRUCTURE.md) | Structure de la base de données, schéma, exemples de documents, colonnes expliquées |
-| [TABLEAU_GUIDE.md](docs/TABLEAU_GUIDE.md) | Guide complet pour créer des visualisations Tableau, requêtes, et prise de décisions |
-| [BENCHMARK.md](docs/BENCHMARK.md) | Documentation des scripts de benchmark, métriques de performance, interprétation |
-| [INSTRUCTIONS.md](docs/INSTRUCTIONS.md) | Instructions pour la présentation en classe |
-| [COMMANDS.md](docs/COMMANDS.md) | Référence des commandes disponibles |
-
-## 🎯 État du Projet
-
-| Composant | État | Notes |
-|-----------|------|-------|
-| ✅ Ingestion (Kafka) | **Complet** | Producer avec état persistant |
-| ✅ Stockage (MongoDB) | **Complet** | Base NoSQL + interface web |
-| ✅ Traitement (Spark Streaming) | **Complet** | Traitement temps réel |
-| ✅ Machine Learning (SparkML) | **Complet** | Ensemble de 3 modèles (99%+ accuracy) |
-| ✅ Visualisation (Tableau) | **Complet** | Guide complet disponible |
-| ✅ Benchmark | **Complet** | Scripts de performance disponibles |
+| Document | Contenu |
+|----------|---------|
+| **README.md** (ce fichier) | Vue d'ensemble, architecture, démarrage |
+| [**INSTRUCTIONS.md**](docs/INSTRUCTIONS.md) | Guide pas-à-pas pour présentation en classe |
+| [**CHARTS.md**](docs/CHARTS.md) | Visualisations Tableau et décisions business |
 
 ---
+
+## 🎯 Workflow Typique
+
+### Première Utilisation
+
+```bash
+# 1. Setup (une seule fois)
+just setup
+
+# 2. Lancer Dagster
+just dagster
+
+# 3. Dans Dagster UI (http://localhost:3000)
+#    Jobs → full_pipeline → Launch Run
+
+# 4. Attendre 15-20 minutes (tout est automatique)
+
+# 5. Résultats dans exports/ (Excel pour Tableau)
+```
+
+### Réentraînement avec Plus de Données
+
+```bash
+# Dagster UI: Jobs → accumulate_data → Launch Run
+# Attendre 2-3 minutes pour +1000-1500 transactions
+
+# Dagster UI: Jobs → train_models → Launch Run
+# Attendre 10-15 minutes
+
+# Dagster UI: Jobs → run_ml_predictions → Launch Run
+# Vérifier les nouvelles métriques
+```
+
+### Validation Rapide
+
+```bash
+# Dagster UI: Jobs → validate_data → Launch Run
+# 30 secondes pour vérifier:
+#   - Qualité des données
+#   - Accuracy des modèles
+#   - Distribution fraude/normal
+#   - Flagged transactions count
+```
+
+---
+
+## 🏆 Points Clés pour Présentation
+
+### Techniquement
+
+- **Streaming temps réel:** Kafka + Spark (pas de batch)
+- **ML distribué:** SparkML sur cluster (scalable)
+- **Ensemble learning:** 3 modèles = robustesse
+- **NoSQL flexible:** MongoDB 4 collections pour traçabilité
+- **Orchestration moderne:** Dagster pour reproductibilité
+
+### Business
+
+- **Détection immédiate:** <2 secondes bout-en-bout
+- **High accuracy:** >99% de précision
+- **Réduction pertes:** Fraudes bloquées en temps réel
+- **Décisions data-driven:** Dashboards Tableau pour insights
+- **Audit complet:** Historique MongoDB de chaque transaction
+
+### Démonstration
+
+1. **Montrer l'architecture** (schéma ci-dessus)
+2. **Lancer Dagster UI** → visualiser le graphe d'assets
+3. **Exécuter full_pipeline** → progression temps réel
+4. **Ouvrir Mongo Express** → 4 collections avec données
+5. **Montrer exports/** → fichiers Excel pour Tableau
+6. **Expliquer décisions business** supportées
+
+---
+
+## 📝 Licence & Crédits
+
+**Projet académique** - Processus Décisionnel Big Data
+**Dataset:** [Credit Card Fraud Detection (Kaggle)](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)
+**Technologies:** Apache Kafka, Apache Spark, MongoDB, Dagster, Python, Docker
+
+---
+
+**🚀 Prêt à démarrer? Lancez `just setup` puis `just dagster`!**

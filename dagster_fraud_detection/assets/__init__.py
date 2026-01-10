@@ -6,12 +6,64 @@ Each asset represents a discrete step in the pipeline
 from dagster import asset, AssetExecutionContext, Output, MetadataValue
 import time
 import subprocess
+import os
 from ..resources import DockerResource, MongoDBResource
+
+
+@asset(
+    description="Start all Docker services (Kafka, MongoDB, Spark, monitoring)",
+    group_name="infrastructure",
+)
+def start_docker_services_asset(context: AssetExecutionContext) -> Output[dict]:
+    """Start all required Docker services using docker-compose"""
+
+    context.log.info("Starting Docker services with docker-compose...")
+
+    try:
+        # Start all services
+        result = subprocess.run(
+            ["docker-compose", "up", "-d"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=os.getcwd()
+        )
+
+        context.log.info(f"Docker Compose output: {result.stdout}")
+
+        # Wait for services to be ready (30 seconds)
+        context.log.info("Waiting for services to initialize (30 seconds)...")
+        time.sleep(30)
+
+        # Check which services started
+        check_result = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        running_services = check_result.stdout.strip().split("\n")
+        context.log.info(f"Running services: {', '.join(running_services)}")
+
+        return Output(
+            {"status": "started", "services": running_services},
+            metadata={
+                "service_count": len(running_services),
+                "services": MetadataValue.json(running_services),
+                "startup_time": "30s"
+            }
+        )
+
+    except subprocess.CalledProcessError as e:
+        context.log.error(f"Failed to start Docker services: {e.stderr}")
+        raise Exception(f"Docker compose failed: {e.stderr}")
 
 
 @asset(
     description="Check that all required Docker services are running",
     group_name="infrastructure",
+    deps=[start_docker_services_asset],
 )
 def check_services_asset(context: AssetExecutionContext, docker: DockerResource) -> Output[dict]:
     """Verify all Docker services are running"""
