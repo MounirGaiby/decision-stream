@@ -5,3 +5,7 @@ pyspark
 pymongo
 psutil
 openpyxl
+dagster
+dagster-webserver
+dagster-docker
+requests

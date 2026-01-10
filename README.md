@@ -308,6 +308,62 @@ python check_ml_predictions.py
 ```
 
 
+---
+
+## 🎭 Orchestration avec Dagster (Recommandé)
+
+### Nouvelle Méthode : Interface Visuelle
+
+Dagster fournit une interface web pour orchestrer tout le pipeline avec des visuels, logs centralisés, et exécution simplifiée.
+
+**Avantages:**
+- ✅ Exécution en un clic de tout le workflow
+- ✅ Suivi visuel de la progression en temps réel
+- ✅ Gestion automatique des dépendances (impossible d'entraîner sans données)
+- ✅ Logs centralisés pour tous les composants
+- ✅ Métriques et métadonnées pour chaque étape
+- ✅ Exécution sélective (lancer uniquement ce dont vous avez besoin)
+
+### Démarrage Rapide
+
+```bash
+# 1. Démarrer l'interface Dagster
+just dagster
+
+# 2. Ouvrir dans le navigateur
+# http://localhost:3000
+
+# 3. Lancer le pipeline complet
+# Jobs → full_pipeline → Launch Run
+
+# C'est tout! Le système exécute automatiquement:
+# accumulation → entraînement → prédictions → validation → export
+```
+
+### Jobs Disponibles
+
+| Job | Description | Durée |
+|-----|-------------|-------|
+| **full_pipeline** | Workflow complet de A à Z | ~15-20 min |
+| **accumulate_data** | Collecter des données d'entraînement | ~2-3 min |
+| **train_models** | Entraîner les 3 modèles ML | ~10-15 min |
+| **run_ml_predictions** | Générer des prédictions en temps réel | ~2-3 min |
+| **validate_data** | Valider la qualité des données et modèles | ~30 sec |
+
+### Assets et Dépendances
+
+```
+check_services → accumulate_data → train_models → run_ml_predictions → validate_data → export_to_excel
+```
+
+📖 **Guide complet:** Voir [DAGSTER.md](docs/DAGSTER.md) pour:
+- Descriptions détaillées de chaque asset
+- Monitoring et logs
+- Troubleshooting
+- Guide pour présentations
+
+---
+
 ## 📊 Dataset
 
 **Credit Card Fraud Detection** (Kaggle)
@@ -459,6 +515,7 @@ just benchmark-throughput duration=120
 
 | Document | Description |
 |----------|-------------|
+| [DAGSTER.md](docs/DAGSTER.md) | Guide complet d'orchestration Dagster (interface UI, jobs, assets, monitoring) |
 | [DATABASE_STRUCTURE.md](docs/DATABASE_STRUCTURE.md) | Structure de la base de données, schéma, exemples de documents, colonnes expliquées |
 | [TABLEAU_GUIDE.md](docs/TABLEAU_GUIDE.md) | Guide complet pour créer des visualisations Tableau, requêtes, et prise de décisions |
 | [BENCHMARK.md](docs/BENCHMARK.md) | Documentation des scripts de benchmark, métriques de performance, interprétation |

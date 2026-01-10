@@ -87,11 +87,13 @@ services:
     container_name: producer
     depends_on:
       - kafka
-    restart: always
+    restart: "no"
+    profiles:
+      - manual  # Only start if explicitly requested (Dagster will manage this)
     env_file:
       - .env
     volumes:
-      - ./state:/app/state 
+      - ./state:/app/state
       - ~/.cache/kagglehub:/root/.cache/kagglehub
 
 volumes:

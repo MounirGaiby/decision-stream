@@ -57,3 +57,8 @@ derby.log
 
 # Docker
 *.pid
+
+# Dagster (runtime directories)
+/.dagster
+/$DAGSTER_HOME
+/exports

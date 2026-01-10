@@ -388,3 +388,40 @@ promote-full:
 
 # One-step setup: Train fully and promote immediately
 setup-models: train-full promote-full
+# =============================================================================
+# Dagster Orchestration
+# =============================================================================
+
+# Start Dagster UI (orchestration platform)
+dagster:
+    @echo "🚀 Starting Dagster UI..."
+    @echo "   Access at: http://localhost:3000"
+    @echo ""
+    @./scripts/start-dagster.sh
+
+# Run a specific Dagster job
+dagster-job job:
+    @echo "🚀 Running Dagster job: {{job}}..."
+    @export DAGSTER_HOME=$(pwd)/.dagster && bash -c "source venv/bin/activate && dagster job execute -m dagster_fraud_detection -j {{job}}"
+
+# List all available Dagster jobs
+dagster-jobs:
+    @echo "📋 Available Dagster Jobs:"
+    @echo ""
+    @bash -c "source venv/bin/activate && dagster job list -m dagster_fraud_detection"
+
+# Launch full pipeline via Dagster
+dagster-full:
+    @just dagster-job full_pipeline
+
+# Launch data accumulation via Dagster
+dagster-accumulate:
+    @just dagster-job accumulate_data
+
+# Launch model training via Dagster
+dagster-train:
+    @just dagster-job train_models
+
+# Launch ML predictions via Dagster
+dagster-predict:
+    @just dagster-job run_ml_predictions

@@ -1,0 +1,7 @@
+# Dagster Workspace Configuration
+# Defines where Dagster should look for code locations
+
+load_from:
+  - python_package:
+      package_name: dagster_fraud_detection
+      location_name: fraud_detection_pipeline
