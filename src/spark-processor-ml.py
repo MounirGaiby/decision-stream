@@ -1,30 +1,22 @@
+#!/usr/bin/env python3
+"""
+High-Performance Spark Streaming Processor (ML Inference)
+Optimized for low latency:
+- Reduces MongoDB writes
+- Calculates all statistics in a single pass
+- Optimizes shuffle partitions for micro-batches
+"""
+
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, current_timestamp, udf, struct
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType
+from pyspark.sql.functions import from_json, col, current_timestamp, struct, lit, when, count, sum as _sum
+from pyspark.sql.types import StructType, StructField, DoubleType, StringType, IntegerType
 from pyspark.ml import PipelineModel
-import os
+from pyspark.sql.functions import udf
+import uuid
 
-# Initialize Spark Session with Kafka and MongoDB packages
-spark = SparkSession.builder \
-    .appName("FraudDetectionSystem") \
-    .config("spark.jars.packages", 
-            "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,"
-            "org.mongodb.spark:mongo-spark-connector_2.12:10.4.0") \
-    .config("spark.mongodb.write.connection.uri", 
-            "mongodb://admin:admin123@mongodb:27017/fraud_detection.transactions?authSource=admin") \
-    .getOrCreate()
-
-# Reduce logging to see our output clearly
-spark.sparkContext.setLogLevel("WARN")
-
-# Chemins
-MODEL_PATH = "/app/models/fraud_detection_model"
-USE_ML_MODEL = os.path.exists(MODEL_PATH)
-
-# Define the COMPLETE schema matching the Credit Card Fraud dataset
+# Schema
 schema = StructType([
     StructField("Time", DoubleType(), True),
-    # Principal Components V1-V28
     StructField("V1", DoubleType(), True),
     StructField("V2", DoubleType(), True),
     StructField("V3", DoubleType(), True),
@@ -53,146 +45,172 @@ schema = StructType([
     StructField("V26", DoubleType(), True),
     StructField("V27", DoubleType(), True),
     StructField("V28", DoubleType(), True),
-    # Amount
     StructField("Amount", DoubleType(), True),
-    # Class: 0 = Normal, 1 = Fraud
     StructField("Class", DoubleType(), True)
 ])
 
-print("=" * 80)
-print("🚀 FRAUD DETECTION SYSTEM - SPARK STREAMING PROCESSOR")
-print("=" * 80)
-print("📊 Reading from Kafka topic: fraud-detection-stream")
-print("💾 Writing to MongoDB: fraud_detection.transactions")
+# Optimized UDFs
+generate_id_udf = udf(lambda: str(uuid.uuid4()), StringType()).asNondeterministic()
 
-# Charger le modèle ML si disponible
-ml_model = None
-if USE_ML_MODEL:
+def extract_fraud_prob(v):
+    return float(v[1]) if v is not None and len(v) > 1 else 0.0
+
+extract_prob_udf = udf(extract_fraud_prob, DoubleType())
+
+def process_batch(batch_df, batch_id, models, mongo_uri):
+    if batch_df.rdd.isEmpty():
+        return
+
+    # Cache immediately to prevent re-computation
+    df_cached = batch_df.withColumn("transaction_id", generate_id_udf()) \
+                        .withColumn("processed_at", current_timestamp()) \
+                        .cache()
+    
+    cnt = df_cached.count()
+    print(f"\n⚡ Batch {batch_id}: Processing {cnt} records...")
+
+    # --- WRITE 1: Raw Data (Bulk Write) ---
+    df_cached.write \
+        .format("mongodb") \
+        .mode("append") \
+        .option("uri", mongo_uri) \
+        .option("collection", "transactions") \
+        .save()
+
+    # --- TRANSFORM: Apply all models in memory (No writes yet) ---
+    preds = {}
+    for name, model in models.items():
+        # Short alias: random_forest -> random, gradient_boosting -> gradient, logistic_regression -> logistic
+        alias = name.split('_')[0] 
+        p = model.transform(df_cached)
+        preds[name] = p.select(
+            col("transaction_id"),
+            col("prediction").cast(IntegerType()).alias(f"{alias}_pred"),
+            extract_prob_udf(col("probability")).alias(f"{alias}_prob")
+        )
+
+    # --- JOIN: Combine everything into one DataFrame ---
+    full_df = df_cached.alias("main") \
+        .join(preds["random_forest"], "transaction_id") \
+        .join(preds["gradient_boosting"], "transaction_id") \
+        .join(preds["logistic_regression"], "transaction_id")
+
+    # --- CALCULATE: Ensemble Logic (Vectorized) ---
+    # FIXED: Updated column names to match the aliases generated above
+    ensemble_df = full_df.withColumn(
+        "models_agreed", 
+        col("random_pred") + col("gradient_pred") + col("logistic_pred")
+    ).withColumn(
+        "ensemble_prediction",
+        when(col("models_agreed") >= 2, 1).otherwise(0)
+    ).withColumn(
+        "ensemble_probability",
+        (col("random_prob") + col("gradient_prob") + col("logistic_prob")) / 3
+    ).withColumn(
+        "flagged",
+        (col("ensemble_probability") > 0.8) | (col("models_agreed") == 3)
+    )
+
+    # --- WRITE 2: Ensemble Results (Contains ALL model data) ---
+    # FIXED: Updated source columns here as well
+    cols_to_save = [
+        "transaction_id", "ensemble_prediction", "ensemble_probability", 
+        "models_agreed", "flagged", "Class", "processed_at",
+        col("random_pred").alias("rf_prediction"), col("random_prob").alias("rf_probability"),
+        col("gradient_pred").alias("gbt_prediction"), col("gradient_prob").alias("gbt_probability"),
+        col("logistic_pred").alias("lr_prediction"), col("logistic_prob").alias("lr_probability")
+    ]
+    
+    final_output = ensemble_df.select(cols_to_save)
+    
+    final_output.write \
+        .format("mongodb") \
+        .mode("append") \
+        .option("uri", mongo_uri) \
+        .option("collection", "ensemble_results") \
+        .save()
+
+    # --- WRITE 3: Flagged (Only if needed) ---
+    # --- STATS: Single Pass Aggregation ---
+    stats = ensemble_df.select(
+        _sum(when(col("Class") == 1, 1).otherwise(0)).alias("actual_fraud"),
+        _sum(when(col("Class") == 0, 1).otherwise(0)).alias("actual_normal"),
+        _sum(when(col("ensemble_prediction") == 1, 1).otherwise(0)).alias("pred_fraud"),
+        _sum(when(col("ensemble_prediction") == 0, 1).otherwise(0)).alias("pred_normal"),
+        _sum(when(col("models_agreed") == 3, 1).otherwise(0)).alias("agree_3"),
+        _sum(when(col("models_agreed") == 0, 1).otherwise(0)).alias("agree_0"),
+        _sum(when(col("flagged") == True, 1).otherwise(0)).alias("flagged_count"),
+        _sum(when(col("Class") == col("ensemble_prediction"), 1).otherwise(0)).alias("correct_preds")
+    ).collect()[0]
+
+    # Handle Flagged Write efficiently
+    flagged_count = stats["flagged_count"]
+    if flagged_count > 0:
+        print(f"   🚨 Writing {flagged_count} high-risk transactions...")
+        final_output.filter(col("flagged") == True).select(
+            "transaction_id", 
+            lit("High Confidence Fraud").alias("reason"), 
+            col("ensemble_probability").alias("confidence"),
+            "processed_at"
+        ).write \
+        .format("mongodb") \
+        .mode("append") \
+        .option("uri", mongo_uri) \
+        .option("collection", "flagged_transactions") \
+        .save()
+
+    # Print Stats
+    accuracy = (stats["correct_preds"] / cnt) * 100 if cnt > 0 else 0
+    print(f"   📊 Stats: Accuracy={accuracy:.1f}% | Fraud Found={stats['pred_fraud']} (Actual={stats['actual_fraud']}) | Flagged={flagged_count}")
+    print(f"   🤖 Consensus: All Agree={stats['agree_3']} | None Agree={stats['agree_0']}")
+
+    df_cached.unpersist()
+
+def main():
+    print("🚀 Starting Optimized ML Processor...")
+    
+    # Tune Spark for Speed
+    spark = SparkSession.builder \
+        .appName("FraudDetectionFast") \
+        .config("spark.sql.shuffle.partitions", "5") \
+        .config("spark.mongodb.output.writeConcern.w", "0") \
+        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0") \
+        .getOrCreate()
+
+    spark.sparkContext.setLogLevel("ERROR")
+    import logging
+    logging.getLogger("org.apache.kafka.clients.consumer").setLevel(logging.ERROR)
+
+    mongo_uri = "mongodb://admin:admin123@mongodb:27017/fraud_detection?authSource=admin"
+
+    # Load Models
+    models = {}
     try:
-        print(f"🤖 Loading ML model from: {MODEL_PATH}")
-        ml_model = PipelineModel.load(MODEL_PATH)
-        print("✅ ML Model loaded successfully - Real-time predictions ENABLED")
+        models["random_forest"] = PipelineModel.load("/app/models/random_forest_model")
+        models["gradient_boosting"] = PipelineModel.load("/app/models/gradient_boosting_model")
+        models["logistic_regression"] = PipelineModel.load("/app/models/logistic_regression_model")
+        print("✅ Models loaded.")
     except Exception as e:
-        print(f"⚠️  Could not load ML model: {e}")
-        print("⚠️  Running WITHOUT predictions")
-        USE_ML_MODEL = False
-else:
-    print("⚠️  No ML model found - Running WITHOUT predictions")
-    print(f"💡 Train a model first: docker exec spark python /app/train_model.py")
+        print(f"❌ Error loading models: {e}")
+        return
 
-print("=" * 80)
+    # Stream
+    kafka_df = spark.readStream \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", "kafka:29092") \
+        .option("subscribe", "fraud-detection-stream") \
+        .option("startingOffsets", "earliest") \
+        .option("maxOffsetsPerTrigger", "2000") \
+        .load()
 
-# 1. Read Stream from Kafka
-df = spark.readStream \
-    .format("kafka") \
-    .option("kafka.bootstrap.servers", "kafka:29092") \
-    .option("subscribe", "fraud-detection-stream") \
-    .option("startingOffsets", "earliest") \
-    .load()
+    parsed_df = kafka_df.select(from_json(col("value").cast("string"), schema).alias("data")).select("data.*")
 
-# 2. Transform the Data (Parse JSON)
-parsed_df = df.select(
-    from_json(col("value").cast("string"), schema).alias("data")
-).select("data.*")
+    query = parsed_df.writeStream \
+        .foreachBatch(lambda df, id: process_batch(df, id, models, mongo_uri)) \
+        .option("checkpointLocation", "/tmp/spark-checkpoint-fast") \
+        .start()
 
-# 3. Add processing timestamp
-enriched_df = parsed_df.withColumn("processed_at", current_timestamp())
+    query.awaitTermination()
 
-# 4. Add ML Predictions if model is loaded
-if USE_ML_MODEL and ml_model is not None:
-    print("🔮 ML Predictions will be added to each transaction")
-    
-    # Faire les prédictions
-    predictions_df = ml_model.transform(enriched_df)
-    
-    # Extraire la probabilité de fraude (probabilité de la classe 1)
-    # probability est un vecteur [prob_class_0, prob_class_1]
-    # On extrait prob_class_1
-    from pyspark.sql.functions import udf
-    from pyspark.sql.types import DoubleType
-    
-    def extract_fraud_probability(probability_vector):
-        """Extrait la probabilité de fraude (classe 1)"""
-        if probability_vector is not None and len(probability_vector) > 1:
-            return float(probability_vector[1])
-        return 0.0
-    
-    extract_prob_udf = udf(extract_fraud_probability, DoubleType())
-    
-    # Ajouter les colonnes de prédiction
-    final_df = predictions_df \
-        .withColumn("fraud_prediction", col("prediction").cast(IntegerType())) \
-        .withColumn("fraud_probability", extract_prob_udf(col("probability"))) \
-        .drop("features_raw", "features", "rawPrediction", "probability", "prediction")
-else:
-    final_df = enriched_df
-
-# 5. Write Stream to MongoDB
-def write_to_mongo(batch_df, batch_id):
-    """
-    Fonction appelée pour chaque micro-batch
-    """
-    if batch_df.count() > 0:
-        print(f"\n{'='*80}")
-        print(f"📦 Processing batch {batch_id} with {batch_df.count()} transactions...")
-        
-        # Statistiques de base
-        fraud_count_actual = batch_df.filter(col("Class") == 1).count()
-        normal_count_actual = batch_df.filter(col("Class") == 0).count()
-        
-        print(f"   📊 Actual Labels:")
-        print(f"      ✅ Normal: {normal_count_actual}")
-        print(f"      🚨 Fraud: {fraud_count_actual}")
-        
-        # Si on a des prédictions ML
-        if USE_ML_MODEL and "fraud_prediction" in batch_df.columns:
-            predicted_fraud = batch_df.filter(col("fraud_prediction") == 1).count()
-            predicted_normal = batch_df.filter(col("fraud_prediction") == 0).count()
-            
-            print(f"   🤖 ML Predictions:")
-            print(f"      ✅ Predicted Normal: {predicted_normal}")
-            print(f"      🚨 Predicted Fraud: {predicted_fraud}")
-            
-            # Calculer l'accuracy sur ce batch (si on a les vraies labels)
-            if fraud_count_actual + normal_count_actual > 0:
-                correct_predictions = batch_df.filter(
-                    col("Class") == col("fraud_prediction")
-                ).count()
-                batch_accuracy = (correct_predictions / batch_df.count()) * 100
-                print(f"   📈 Batch Accuracy: {batch_accuracy:.2f}%")
-            
-            # Afficher les transactions suspectes (haute probabilité de fraude)
-            high_risk = batch_df.filter(col("fraud_probability") > 0.8).count()
-            if high_risk > 0:
-                print(f"   ⚠️  HIGH RISK: {high_risk} transactions with >80% fraud probability")
-        
-        # Write to MongoDB
-        try:
-            batch_df.write \
-                .format("mongodb") \
-                .mode("append") \
-                .save()
-            print(f"   ✅ Batch {batch_id} saved to MongoDB successfully!")
-        except Exception as e:
-            print(f"   ❌ Error saving batch {batch_id}: {e}")
-        
-        print(f"{'='*80}\n")
-    else:
-        print(f"📦 Batch {batch_id} is empty, skipping...")
-
-# Start the streaming query with MongoDB sink
-query = final_df.writeStream \
-    .foreachBatch(write_to_mongo) \
-    .outputMode("append") \
-    .option("checkpointLocation", "/tmp/spark-checkpoint-ml") \
-    .start()
-
-print("\n✅ Streaming query started! Waiting for data...")
-if USE_ML_MODEL:
-    print("🤖 ML Model is active - Real-time fraud predictions enabled!")
-else:
-    print("⚠️  Running without ML predictions")
-print("💡 Press Ctrl+C to stop\n")
-
-# Wait for termination
-query.awaitTermination()
+if __name__ == "__main__":
+    main()

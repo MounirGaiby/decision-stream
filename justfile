@@ -20,7 +20,7 @@ setup: start install-deps check
     @echo ""
     @echo "Next steps:"
     @echo "  1. Accumulate data: just run-basic"
-    @echo "  2. Train model: just train"
+    @echo "  2. Train models: just train"
     @echo "  3. Run with ML: just run-ml"
 
 # Install just command runner
@@ -107,47 +107,26 @@ run-basic:
         --conf spark.mongodb.write.connection.uri="mongodb://admin:admin123@mongodb:27017/fraud_detection.transactions?authSource=admin" \
         /app/src/spark-processor.py
 
-# Run Spark processor WITH ML predictions
+# Run Spark processor WITH ML predictions (3 models: Random Forest, Gradient Boosting, Logistic Regression)
 run-ml:
-    @echo "🤖 Starting Spark processor (with ML predictions)..."
-    @echo "💡 Press Ctrl+C to stop"
-    docker exec spark /opt/spark/bin/spark-submit \
-        --master local[*] \
-        --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
-        --conf spark.mongodb.write.connection.uri="mongodb://admin:admin123@mongodb:27017/fraud_detection.transactions?authSource=admin" \
-        /app/src/spark-processor-ml.py
-
-# Train the ML model (Random Forest - single model)
-train:
-    @echo "🎓 Training fraud detection model..."
-    @echo "⏱️  This will take 5-10 minutes..."
-    docker exec spark /opt/spark/bin/spark-submit \
-        --master local[*] \
-        --packages org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
-        /app/src/train_model.py
-    @echo ""
-    @echo "✅ Model trained! Next step: just run-ml"
-
-# Train ensemble models (Random Forest + Gradient Boosting + Logistic Regression)
-train-ensemble:
-    @echo "🎓 Training ensemble models (3 models)..."
-    @echo "⏱️  This will take 10-15 minutes..."
-    docker exec spark /opt/spark/bin/spark-submit \
-        --master local[*] \
-        --packages org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
-        /app/src/train_models_ensemble.py
-    @echo ""
-    @echo "✅ All 3 models trained! Next step: just run-ensemble"
-
-# Run Spark processor WITH ensemble ML predictions (3 models)
-run-ensemble:
-    @echo "🤖 Starting Ensemble ML processor (3 models + voting)..."
+    @echo "🤖 Starting Spark processor (with ML predictions - 3 models)..."
     @echo "💡 Press Ctrl+C to stop"
     docker exec spark /opt/spark/bin/spark-submit \
         --master local[*] \
         --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
         --conf spark.mongodb.write.connection.uri="mongodb://admin:admin123@mongodb:27017/fraud_detection?authSource=admin" \
-        /app/src/spark-processor-ensemble.py
+        /app/src/spark-processor-ml.py
+
+# Train ML models (Random Forest + Gradient Boosting + Logistic Regression)
+train:
+    @echo "🎓 Training fraud detection models (3 models)..."
+    @echo "⏱️  This will take 10-15 minutes..."
+    docker exec spark /opt/spark/bin/spark-submit \
+        --master local[*] \
+        --packages org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
+        /app/src/train_model.py
+    @echo ""
+    @echo "✅ All 3 models trained! Next step: just run-ml"
 
 # =============================================================================
 # Monitoring & Verification
@@ -160,10 +139,6 @@ check:
 # Check ML predictions and model performance
 check-ml:
     @bash -c "source venv/bin/activate && python src/check_ml_predictions.py"
-
-# Check ensemble predictions (3 models + flagged transactions)
-check-ensemble:
-    @bash -c "source venv/bin/activate && python src/check_ensemble.py"
 
 # View logs for all services
 logs:
@@ -197,22 +172,30 @@ ui-logs:
 
 # Clean up all data and restart fresh
 clean:
-    @echo "🧹 Cleaning up..."
-    @echo "⚠️  This will delete all data!"
-    @read -p "Are you sure? (y/N) " -n 1 -r; \
-    echo ""; \
-    if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-        docker-compose down -v; \
-        rm -rf state/producer_state.db; \
-        echo "✅ Cleaned up. Run 'just start' to restart"; \
-    else \
-        echo "❌ Cancelled"; \
-    fi
+    @echo "🧹 Cleaning up all data..."
+    docker exec spark rm -rf /app/models/random_forest_model \
+        /app/models/gradient_boosting_model \
+        /app/models/logistic_regression_model \
+        /app/models/model_metadata.txt 2>/dev/null || true
+    docker exec spark rm -rf /tmp/spark-checkpoint /tmp/spark-checkpoint-ml 2>/dev/null || true
+    docker-compose down -v
+    rm -rf state/producer_state.db
+    rm -rf models/
+    @echo "✅ Cleaned up. Run 'just start' to restart"
 
-# Remove trained model
+# Remove trained models (all 3 models)
 clean-model:
-    docker exec spark rm -rf /app/models/fraud_detection_model /app/models/feature_metadata.txt
-    @echo "✅ Model removed. Run 'just train' to retrain."
+    docker exec spark rm -rf /app/models/random_forest_model \
+        /app/models/gradient_boosting_model \
+        /app/models/logistic_regression_model \
+        /app/models/model_metadata.txt
+    @echo "✅ All models removed. Run 'just train' to retrain."
+
+# Clear Spark checkpoints (fixes concurrent stream errors)
+clean-checkpoint:
+    @echo "🧹 Clearing Spark checkpoints..."
+    docker exec spark rm -rf /tmp/spark-checkpoint /tmp/spark-checkpoint-ml
+    @echo "✅ Checkpoints cleared. You can now restart the processor."
 
 # Reset producer state (restart from beginning of dataset)
 reset-producer:
@@ -229,20 +212,35 @@ shell-spark:
 
 # Enter MongoDB shell
 shell-mongo:
-    docker exec -it mongodb mongosh -u admin -p admin123
+    docker exec -it mongodb mongosh -u admin -p admin123 --authenticationDatabase admin fraud_detection
 
 # Run Python script in Spark container
 run-script script:
     docker exec spark python /app/{{script}}
 
-# Check if model exists
+# Check if models exist (all 3 models)
 check-model:
-    @if docker exec spark test -d /app/models/fraud_detection_model; then \
-        echo "✅ Model exists at /app/models/fraud_detection_model"; \
-        docker exec spark ls -lh /app/models/; \
+    @echo "🔍 Checking for trained models..."
+    @if docker exec spark test -d /app/models/random_forest_model && \
+       docker exec spark test -d /app/models/gradient_boosting_model && \
+       docker exec spark test -d /app/models/logistic_regression_model; then \
+        echo "✅ All 3 models found:"; \
+        echo "   - Random Forest"; \
+        echo "   - Gradient Boosting"; \
+        echo "   - Logistic Regression"; \
+        docker exec spark ls -lh /app/models/ | grep "_model"; \
     else \
-        echo "❌ No model found. Run 'just train' first."; \
+        echo "❌ Not all models found. Run 'just train' first."; \
+        echo "   Missing:"; \
+        docker exec spark test -d /app/models/random_forest_model || echo "     - Random Forest"; \
+        docker exec spark test -d /app/models/gradient_boosting_model || echo "     - Gradient Boosting"; \
+        docker exec spark test -d /app/models/logistic_regression_model || echo "     - Logistic Regression"; \
     fi
+
+# Export MongoDB data to Excel files for Tableau analysis
+export-excel:
+    @echo "📤 Exporting MongoDB data to Excel files..."
+    python src/export_to_excel.py
 
 # Show disk usage for Docker volumes
 disk-usage:
@@ -253,48 +251,89 @@ disk-usage:
 # Complete Workflows
 # =============================================================================
 
-# Complete workflow: accumulate data, train model, run with ML
+# Interactive workflow: guides you through each step without breaking on stop
 workflow:
-    @echo "🔄 Starting complete ML workflow..."
-    @echo ""
-    @echo "Step 1/4: Checking setup..."
-    @just status
-    @echo ""
-    @echo "Step 2/4: You need to run 'just run-basic' and let it accumulate data"
-    @echo "         Press Ctrl+C after 5-10 minutes (5000+ transactions)"
-    @echo ""
-    @echo "Step 3/4: After stopping, run 'just train' to train the model"
-    @echo ""
-    @echo "Step 4/4: Finally, run 'just run-ml' to use ML predictions"
-    @echo ""
-    @echo "Or use the interactive workflow: just workflow-interactive"
-
-# Interactive workflow with prompts
-workflow-interactive:
     @echo "🎯 Interactive ML Workflow"
+    @echo "=================================================================================="
     @echo ""
+    @echo "This workflow will guide you through:"
+    @echo "  1. Accumulate training data"
+    @echo "  2. Train ML models"
+    @echo "  3. Run with ML predictions"
+    @echo "  4. Export to Excel for Tableau"
+    @echo ""
+    @bash -c 'read -p "Press Enter to start Step 1 (Accumulate Data)..." </dev/tty'
+    
+    @echo ""
+    @echo "📊 Step 1/4: Accumulating Training Data"
+    @echo "   Starting Spark processor..."
+    @echo "   💡 Logs will show below. Let it run for 5-10 minutes."
+    @echo "   ⚠️  PRESS ENTER TO STOP AND PROCEED (Do NOT use Ctrl+C)"
+    @echo "   -------------------------------------------------------"
+    @# Logic: Start Spark in background -> Tail logs -> Wait for Enter -> Kill Spark
+    @( \
+        docker exec spark /opt/spark/bin/spark-submit \
+            --master local[*] \
+            --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
+            --conf spark.mongodb.write.connection.uri="mongodb://admin:admin123@mongodb:27017/fraud_detection.transactions?authSource=admin" \
+            /app/src/spark-processor.py > accumulation.log 2>&1 & \
+        SPARK_PID=$$!; \
+        tail -f accumulation.log & \
+        TAIL_PID=$$!; \
+        read -p "   [Running...] Press ENTER to stop accumulation..." ; \
+        kill $$TAIL_PID 2>/dev/null; \
+        kill $$SPARK_PID 2>/dev/null; \
+        docker exec spark pkill -f spark-processor.py 2>/dev/null || true; \
+        rm -f accumulation.log; \
+        echo "   ✅ Stopped accumulation." \
+    )
+    
+    @echo ""
+    @echo "✅ Step 1 complete!"
     @just check
     @echo ""
-    @read -p "Start basic processor to accumulate data? (y/N) " -n 1 -r; \
-    echo ""; \
-    if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-        echo "Starting processor... Press Ctrl+C after 5-10 minutes"; \
-        just run-basic; \
-    fi
+    @bash -c 'read -p "Press Enter to continue to Step 2 (Train Models)..." </dev/tty'
+    
     @echo ""
-    @just check
+    @echo "🎓 Step 2/4: Training ML Models"
+    @just train
+    
     @echo ""
-    @read -p "Train model now? (y/N) " -n 1 -r; \
-    echo ""; \
-    if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-        just train; \
-    fi
+    @bash -c 'read -p "Press Enter to continue to Step 3 (Run ML Predictions)..." </dev/tty'
+    
     @echo ""
-    @read -p "Start ML-enabled processor? (y/N) " -n 1 -r; \
-    echo ""; \
-    if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-        just run-ml; \
-    fi
+    @echo "🤖 Step 3/4: Running ML Predictions"
+    @echo "   Starting Spark processor with ML..."
+    @echo "   ⚠️  PRESS ENTER TO STOP AND PROCEED (Do NOT use Ctrl+C)"
+    @echo "   -------------------------------------------------------"
+    @( \
+        docker exec spark /opt/spark/bin/spark-submit \
+            --master local[*] \
+            --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
+            --conf spark.mongodb.write.connection.uri="mongodb://admin:admin123@mongodb:27017/fraud_detection?authSource=admin" \
+            /app/src/spark-processor-ml.py > prediction.log 2>&1 & \
+        SPARK_PID=$$!; \
+        tail -f prediction.log & \
+        TAIL_PID=$$!; \
+        read -p "   [Running...] Press ENTER to stop predictions..." ; \
+        kill $$TAIL_PID 2>/dev/null; \
+        kill $$SPARK_PID 2>/dev/null; \
+        docker exec spark pkill -f spark-processor-ml.py 2>/dev/null || true; \
+        rm -f prediction.log; \
+        echo "   ✅ Stopped predictions." \
+    )
+    
+    @echo ""
+    @echo "✅ Step 3 complete!"
+    @just check-ml
+    @echo ""
+    @bash -c 'read -p "Press Enter to continue to Step 4 (Export to Excel)..." </dev/tty'
+    
+    @echo ""
+    @echo "📤 Step 4/4: Exporting to Excel"
+    @just export-excel
+    @echo ""
+    @echo "✅ Workflow Complete!"
 
 # Quick health check of the entire system
 health:
@@ -319,3 +358,33 @@ health:
     @echo "5️⃣  Web Interfaces:"
     @echo "   Mongo Express: http://localhost:8081"
     @echo "   Dozzle Logs:   http://localhost:8080"
+
+# =============================================================================
+# Direct Training (Bypasses Kafka)
+# =============================================================================
+
+# Train models directly from CSV (Fastest method)
+train-full:
+    @echo "🎓 Training models directly from CSV (skipping Kafka)..."
+    @# Ensure pip is up to date and install kagglehub if missing
+    docker exec -u root spark pip install kagglehub > /dev/null 2>&1 || true
+    @# Run the script
+    docker exec spark /opt/spark/bin/spark-submit \
+        --master local[*] \
+        /app/src/train_model_full.py
+
+# Promote fully trained models to be the active models
+promote-full:
+    @echo "🚀 Promoting fully trained models..."
+    @# Clear old active models
+    docker exec spark rm -rf /app/models/random_forest_model \
+                             /app/models/gradient_boosting_model \
+                             /app/models/logistic_regression_model
+    @# Copy new models
+    docker exec spark cp -r /app/models/fully_trained/random_forest_model /app/models/
+    docker exec spark cp -r /app/models/fully_trained/gradient_boosting_model /app/models/
+    docker exec spark cp -r /app/models/fully_trained/logistic_regression_model /app/models/
+    @echo "✅ Models promoted! You can now run 'just run-ml'."
+
+# One-step setup: Train fully and promote immediately
+setup-models: train-full promote-full

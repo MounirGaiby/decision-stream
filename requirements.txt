@@ -4,3 +4,4 @@ kagglehub
 pyspark
 pymongo
 psutil
+openpyxl

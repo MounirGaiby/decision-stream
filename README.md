@@ -47,7 +47,7 @@ Dataset Kaggle
     ↓
 Producer (Python) → Kafka → Spark Streaming → MongoDB → Tableau
                                 ↓
-                         SparkML (Random Forest)
+                         SparkML (3 Models: Random Forest, Gradient Boosting, Logistic Regression)
                                 ↓
                     Prédictions temps réel
 ```
@@ -58,7 +58,7 @@ Producer (Python) → Kafka → Spark Streaming → MongoDB → Tableau
 |-----------|-------------|------|
 | **Ingestion** | Kafka | Streaming des transactions en temps réel |
 | **Traitement** | Spark Streaming | Traitement et transformation des données |
-| **ML** | SparkML (Random Forest) | Détection de fraude par Machine Learning |
+| **ML** | SparkML (3 Models Ensemble) | Détection de fraude par Machine Learning avec 3 modèles |
 | **Stockage** | MongoDB | Base de données NoSQL pour persistance |
 | **Visualisation** | Tableau | Dashboards et analyses visuelles |
 | **Monitoring** | Dozzle, Mongo Express | Surveillance système et données |
@@ -221,7 +221,7 @@ python check-mongodb.py
 ```bash
 # 1. Arrêter le processeur Spark (Ctrl+C dans le terminal)
 
-# 2. Entraîner le modèle Random Forest
+# 2. Entraîner les modèles ML (3 modèles)
 just train                  # ou: make train
 ```
 
@@ -244,8 +244,8 @@ just train                  # ou: make train
    Normal transactions: 4990+ (99.X%)
    Fraudulent transactions: 10+ (0.X%)
 
-🌲 Training Random Forest...
-   ✅ Model trained successfully!
+🌲 Training ML Models (Random Forest, Gradient Boosting, Logistic Regression)...
+   ✅ All 3 models trained successfully!
 
 📈 MODEL PERFORMANCE METRICS
    AUC-ROC:   0.98+
@@ -350,14 +350,24 @@ python check_ml_predictions.py
 
 ## 🤖 Machine Learning
 
-### Algorithme : Random Forest Classifier
+### Algorithmes : Ensemble de 3 Modèles
 
-**Configuration :**
-- Nombre d'arbres : 100
-- Profondeur maximale : 10
+**Modèles utilisés :**
+1. **Random Forest Classifier**
+   - Nombre d'arbres : 100
+   - Profondeur maximale : 10
+2. **Gradient Boosting Trees**
+   - Nombre d'itérations : 50
+   - Profondeur maximale : 5
+3. **Logistic Regression**
+   - Nombre d'itérations : 100
+   - Régularisation : 0.01
+
+**Configuration commune :**
 - Features : V1-V28 + Amount (29 features)
 - Normalisation : StandardScaler
 - Split : 80% train / 20% test
+- Prédiction finale : Vote majoritaire des 3 modèles
 
 ### Métriques de Performance
 
@@ -462,7 +472,7 @@ just benchmark-throughput duration=120
 | ✅ Ingestion (Kafka) | **Complet** | Producer avec état persistant |
 | ✅ Stockage (MongoDB) | **Complet** | Base NoSQL + interface web |
 | ✅ Traitement (Spark Streaming) | **Complet** | Traitement temps réel |
-| ✅ Machine Learning (SparkML) | **Complet** | Random Forest 99%+ accuracy |
+| ✅ Machine Learning (SparkML) | **Complet** | Ensemble de 3 modèles (99%+ accuracy) |
 | ✅ Visualisation (Tableau) | **Complet** | Guide complet disponible |
 | ✅ Benchmark | **Complet** | Scripts de performance disponibles |
 

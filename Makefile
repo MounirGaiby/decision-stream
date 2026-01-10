@@ -163,8 +163,8 @@ ui-logs: ## Open Dozzle log viewer in browser
 clean: ## Clean up all data and restart fresh
 	@echo "🧹 Cleaning up..."
 	@echo "⚠️  This will delete all data!"
-	@read -p "Are you sure? (y/N) " answer; \
-	if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
+	@read -p "Are you sure? (yes/no) " REPLY; \
+	if [ "$$REPLY" = "yes" ]; then \
 		docker-compose down -v; \
 		rm -rf state/producer_state.db; \
 		echo "✅ Cleaned up. Run 'make start' to restart"; \
@@ -173,7 +173,7 @@ clean: ## Clean up all data and restart fresh
 	fi
 
 clean-model: ## Remove trained model
-	docker exec spark rm -rf /app/models/fraud_detection_model /app/models/feature_metadata.txt
+	docker exec spark rm -rf /app/models/random_forest_model /app/models/gradient_boosting_model /app/models/logistic_regression_model /app/models/model_metadata.txt
 	@echo "✅ Model removed. Run 'make train' to retrain."
 
 reset-producer: ## Reset producer state
@@ -191,8 +191,10 @@ shell-mongo: ## Enter MongoDB shell
 	docker exec -it mongodb mongosh -u admin -p admin123
 
 check-model: ## Check if model exists
-	@if docker exec spark test -d /app/models/fraud_detection_model 2>/dev/null; then \
-		echo "✅ Model exists at /app/models/fraud_detection_model"; \
+	@if docker exec spark test -d /app/models/random_forest_model 2>/dev/null && \
+	   docker exec spark test -d /app/models/gradient_boosting_model 2>/dev/null && \
+	   docker exec spark test -d /app/models/logistic_regression_model 2>/dev/null; then \
+		echo "✅ All 3 models exist"; \
 		docker exec spark ls -lh /app/models/; \
 	else \
 		echo "❌ No model found. Run 'make train' first."; \

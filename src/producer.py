@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+"""
+Simulation Kafka Producer
+Streams Credit Card transactions at a realistic human-watchable speed.
+Target Duration: ~30 minutes for full dataset (285k records).
+"""
+
 import time
 import json
 import os
@@ -12,8 +19,12 @@ import kagglehub
 # Get config from Docker environment variables
 KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
 KAFKA_TOPIC = os.getenv('KAFKA_TOPIC', "fraud-detection-stream")
-# This now defaults to the folder we mounted
 DB_FILE = os.getenv('STATE_FILE', "state/producer_state.db") 
+
+# --- TUNING FOR 30 MINUTE DEMO ---
+# 285,000 records / 30 mins = ~158 records/sec
+BATCH_SIZE = 100         # Send 100 records at a time (smooth visual updates)
+SLEEP_PER_BATCH = 0.6    # Sleep 0.6s between batches (Speed: ~166 records/sec)
 
 # Download Dataset
 print("Checking dataset...")
@@ -22,9 +33,7 @@ CSV_FILE_PATH = os.path.join(dataset_path, "creditcard.csv")
 
 # --- 1. SQLite State Management ---
 def init_db():
-    # Ensure the directory exists (in case we run locally without Docker)
     os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
-    
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS state 
@@ -53,7 +62,6 @@ def update_last_index(index):
 
 # --- 2. Kafka Setup ---
 def ensure_topic_exists():
-    # Only try to create topic if we are connecting to a real server (not testing)
     try:
         admin_client = KafkaAdminClient(bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)
         existing_topics = admin_client.list_topics()
@@ -76,7 +84,9 @@ def simulate_stream():
     
     producer = KafkaProducer(
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-        value_serializer=lambda x: json.dumps(x).encode('utf-8')
+        value_serializer=lambda x: json.dumps(x).encode('utf-8'),
+        linger_ms=10,
+        batch_size=16384
     )
 
     print(f"Loading data from {CSV_FILE_PATH}...")
@@ -90,23 +100,39 @@ def simulate_stream():
         print("Dataset already fully processed! Delete 'state/producer_state.db' to restart.")
         return
 
-    print(f"Resuming stream from index {start_index}...")
+    print(f"🚀 Resuming simulation from index {start_index}...")
+    print(f"⏱️  Target Duration: ~30 minutes remaining")
+    print(f"⚡ Speed: ~{int(BATCH_SIZE / SLEEP_PER_BATCH)} records/second")
 
     try:
-        # Use iloc to skip already processed rows
-        for relative_index, row in df.iloc[start_index:].iterrows():
+        count = 0
+        current_batch_end_index = start_index
+
+        subset_df = df.iloc[start_index:]
+        
+        for row in subset_df.itertuples(index=True):
+            message = row._asdict()
+            del message['Index'] 
             
-            # The 'relative_index' in iloc is 0, 1, 2... of the SLICE. 
-            # We need the ACTUAL index from the dataframe
-            actual_index = start_index + relative_index
-            
-            message = row.to_dict()
             producer.send(KAFKA_TOPIC, value=message)
             
-            print(f"[{actual_index}/{total_rows}] Sent: Time={message['Time']}, Class={message['Class']}")
-            
-            update_last_index(actual_index)
-            time.sleep(0.1)
+            count += 1
+            current_batch_end_index = row.Index
+
+            if count % BATCH_SIZE == 0:
+                producer.flush()
+                update_last_index(current_batch_end_index)
+                
+                # Print every 10 batches (every 1000 records) to keep console clean
+                if count % (BATCH_SIZE * 10) == 0:
+                    progress = (current_batch_end_index / total_rows) * 100
+                    print(f"[{current_batch_end_index}/{total_rows}] 📤 Stream Progress: {progress:.1f}%")
+                
+                time.sleep(SLEEP_PER_BATCH)
+
+        producer.flush()
+        update_last_index(current_batch_end_index)
+        print(f"✅ Finished! Sent {count} total records.")
             
     except KeyboardInterrupt:
         print("\nStream paused. Progress saved.")

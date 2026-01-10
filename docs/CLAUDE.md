@@ -134,7 +134,7 @@ just check
 just train
 
 # This runs: docker exec spark python /app/train_model.py
-# Output: /app/models/fraud_detection_model
+# Output: /app/models/random_forest_model, gradient_boosting_model, logistic_regression_model
 ```
 
 **Phase 3: Run with ML Predictions**
@@ -167,9 +167,11 @@ just check-ml
 
 **`spark-processor-ml.py`** (ML mode):
 - Everything from basic mode, PLUS:
-- Loads trained model from `/app/models/fraud_detection_model`
-- Applies model to each micro-batch
-- Adds two fields: `fraud_prediction` (0/1), `fraud_probability` (0.0-1.0)
+- Loads 3 trained models: Random Forest, Gradient Boosting, Logistic Regression
+- Applies all 3 models to each micro-batch
+- Creates ensemble prediction via majority voting
+- Saves individual model predictions and ensemble results to MongoDB
+- Flags high-risk transactions (all 3 models agree or high probability)
 - Prints per-batch accuracy and high-risk alerts
 
 **Key Implementation Details:**
@@ -183,18 +185,24 @@ just check-ml
 1. Load data from MongoDB (requires 100+ transactions, at least 1 fraud)
 2. Feature engineering: Assemble V1-V28 + Amount into vector
 3. Normalization: StandardScaler (mean=0, std=1)
-4. Train: Random Forest (100 trees, max depth 10)
-5. Evaluate: AUC-ROC, Accuracy, Precision, Recall, F1
-6. Save: Model + feature metadata
+4. Train 3 models:
+   - Random Forest (100 trees, max depth 10)
+   - Gradient Boosting (50 iterations, max depth 5)
+   - Logistic Regression (100 iterations, regParam 0.01)
+5. Evaluate each model: AUC-ROC, Accuracy, Precision, Recall, F1
+6. Save: All 3 models + metadata
 
-**SparkML Pipeline:**
+**SparkML Pipeline (common to all models):**
 - `VectorAssembler`: Combines 29 features into single vector
-- `StandardScaler`: Normalizes features (critical for RF performance)
-- `RandomForestClassifier`: 100 trees, depth 10, seed 42
+- `StandardScaler`: Normalizes features
+- Individual classifiers for each model type
 
 **Output:**
-- Model saved to `/app/models/fraud_detection_model` (PipelineModel)
-- Metadata saved to `/app/models/feature_metadata.txt`
+- Models saved to:
+  - `/app/models/random_forest_model` (PipelineModel)
+  - `/app/models/gradient_boosting_model` (PipelineModel)
+  - `/app/models/logistic_regression_model` (PipelineModel)
+- Metadata saved to `/app/models/model_metadata.txt`
 
 ### Data Schema
 
@@ -236,10 +244,13 @@ just check-ml
 - Test without ML first (`spark-processor.py`) before adding ML features
 
 ### Working with Models
-- Model must exist at `/app/models/fraud_detection_model` before running ML processor
-- Model is a PipelineModel including VectorAssembler + StandardScaler + RandomForestModel
-- If schema changes, retrain model - don't try to adapt old model
-- Check model exists: `docker exec spark ls -la /app/models/`
+- All 3 models must exist before running ML processor:
+  - `/app/models/random_forest_model`
+  - `/app/models/gradient_boosting_model`
+  - `/app/models/logistic_regression_model`
+- Each model is a PipelineModel including VectorAssembler + StandardScaler + Classifier
+- If schema changes, retrain all models - don't try to adapt old models
+- Check models exist: `just check-model` or `docker exec spark ls -la /app/models/`
 
 ### Kafka Configuration
 - Producer connects to: `kafka:29092` (internal Docker network)
@@ -267,7 +278,7 @@ STATE_FILE=/app/state/producer_state.db
 
 **"No data in MongoDB"**: Check producer is running (`docker ps`), check Kafka has data (`docker logs producer`), verify Spark is consuming (`docker logs spark`)
 
-**"Could not load ML model"**: Train model first with `just train`, verify `/app/models/fraud_detection_model` exists in Spark container
+**"Could not load ML model"**: Train models first with `just train`, verify all 3 models exist in Spark container using `just check-model`
 
 **"Not enough data for training"**: Accumulate at least 100 transactions (preferably 1000+) with at least 1 fraud case before training
 
