@@ -70,7 +70,7 @@ log service:
 # Show status of running containers
 status:
     @echo "📊 Docker Container Status:"
-    @docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    @docker ps
 
 # Quick health check
 health:
@@ -84,7 +84,7 @@ health:
     fi
     @echo ""
     @echo "2️⃣  Containers:"
-    @docker ps --format "   {{.Names}}: {{.Status}}" 2>/dev/null || echo "   No containers running"
+    @docker ps 2>/dev/null | tail -n +2 | awk '{print "   " $NF ": " $(NF-1)}' || echo "   No containers running"
     @echo ""
     @echo "3️⃣  Web Interfaces:"
     @echo "   • Dagster UI:    http://localhost:3000"
