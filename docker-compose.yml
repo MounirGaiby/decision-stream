@@ -79,6 +79,7 @@ services:
       - SPARK_SSL_ENABLED=no
     volumes:
       - .:/app
+      - ~/.cache/kagglehub:/data/kagglehub
     working_dir: /app
     command: tail -f /dev/null
 
@@ -87,9 +88,9 @@ services:
     container_name: producer
     depends_on:
       - kafka
-    restart: "no"
-    profiles:
-      - manual  # Only start if explicitly requested (Dagster will manage this)
+    # restart: "no" # Removed restart no to act like normal service
+    # profiles:     # Removed manual profile so it starts by default
+    #   - manual 
     env_file:
       - .env
     volumes:

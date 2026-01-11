@@ -9,7 +9,7 @@ from datetime import datetime
 # Configuration MongoDB
 MONGO_URI = "mongodb://admin:admin123@localhost:27017/"
 DATABASE = "fraud_detection"
-COLLECTION = "transactions"
+COLLECTION = "fraud_predictions"
 
 def check_mongodb():
     """

@@ -67,14 +67,14 @@ def process_batch(batch_df, batch_id, models, mongo_uri):
                         .cache()
     
     cnt = df_cached.count()
-    print(f"\n⚡ Batch {batch_id}: Processing {cnt} records...")
+    print(f"\nBatch {batch_id}: Processing {cnt} records...")
 
     # --- WRITE 1: Raw Data (Bulk Write) ---
     df_cached.write \
         .format("mongodb") \
         .mode("append") \
         .option("uri", mongo_uri) \
-        .option("collection", "transactions") \
+        .option("collection", "live_stream_events") \
         .save()
 
     # --- TRANSFORM: Apply all models in memory (No writes yet) ---
@@ -127,7 +127,7 @@ def process_batch(batch_df, batch_id, models, mongo_uri):
         .format("mongodb") \
         .mode("append") \
         .option("uri", mongo_uri) \
-        .option("collection", "ensemble_results") \
+        .option("collection", "fraud_predictions") \
         .save()
 
     # --- WRITE 3: Flagged (Only if needed) ---
@@ -146,7 +146,7 @@ def process_batch(batch_df, batch_id, models, mongo_uri):
     # Handle Flagged Write efficiently
     flagged_count = stats["flagged_count"]
     if flagged_count > 0:
-        print(f"   🚨 Writing {flagged_count} high-risk transactions...")
+        print(f"   Writing {flagged_count} high-risk transactions...")
         final_output.filter(col("flagged") == True).select(
             "transaction_id", 
             lit("High Confidence Fraud").alias("reason"), 
@@ -156,22 +156,30 @@ def process_batch(batch_df, batch_id, models, mongo_uri):
         .format("mongodb") \
         .mode("append") \
         .option("uri", mongo_uri) \
-        .option("collection", "flagged_transactions") \
+        .option("collection", "high_risk_alerts") \
         .save()
 
     # Print Stats
     accuracy = (stats["correct_preds"] / cnt) * 100 if cnt > 0 else 0
-    print(f"   📊 Stats: Accuracy={accuracy:.1f}% | Fraud Found={stats['pred_fraud']} (Actual={stats['actual_fraud']}) | Flagged={flagged_count}")
-    print(f"   🤖 Consensus: All Agree={stats['agree_3']} | None Agree={stats['agree_0']}")
+    print(f"   Stats: Accuracy={accuracy:.1f}% | Fraud Found={stats['pred_fraud']} (Actual={stats['actual_fraud']}) | Flagged={flagged_count}")
+    print(f"   Consensus: All Agree={stats['agree_3']} | None Agree={stats['agree_0']}")
 
     df_cached.unpersist()
 
+import argparse
+
+# ... imports ...
+
 def main():
-    print("🚀 Starting Optimized ML Processor...")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model-type", choices=["standard", "full"], default="standard", help="Model type to use: standard or full")
+    args = parser.parse_args()
+
+    print(f"Starting Optimized ML Processor (Mode: {args.model_type.upper()})...")
     
     # Tune Spark for Speed
     spark = SparkSession.builder \
-        .appName("FraudDetectionFast") \
+        .appName(f"FraudDetectionFast_{args.model_type}") \
         .config("spark.sql.shuffle.partitions", "5") \
         .config("spark.mongodb.output.writeConcern.w", "0") \
         .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.4.0") \
@@ -185,13 +193,30 @@ def main():
 
     # Load Models
     models = {}
+    
+    # Define model paths based on type
+    if args.model_type == "full":
+        # Full models end in _full
+        paths = {
+            "random_forest": "/app/models/random_forest_full",
+            "gradient_boosting": "/app/models/gradient_boosting_full",
+            "logistic_regression": "/app/models/logistic_regression_full"
+        }
+    else:
+        # Standard models end in _model
+        paths = {
+            "random_forest": "/app/models/random_forest_model",
+            "gradient_boosting": "/app/models/gradient_boosting_model",
+            "logistic_regression": "/app/models/logistic_regression_model"
+        }
+
     try:
-        models["random_forest"] = PipelineModel.load("/app/models/random_forest_model")
-        models["gradient_boosting"] = PipelineModel.load("/app/models/gradient_boosting_model")
-        models["logistic_regression"] = PipelineModel.load("/app/models/logistic_regression_model")
-        print("✅ Models loaded.")
+        models["random_forest"] = PipelineModel.load(paths["random_forest"])
+        models["gradient_boosting"] = PipelineModel.load(paths["gradient_boosting"])
+        models["logistic_regression"] = PipelineModel.load(paths["logistic_regression"])
+        print(f"Models loaded successfully from: {[p for p in paths.values()]}")
     except Exception as e:
-        print(f"❌ Error loading models: {e}")
+        print(f"Error loading models: {e}")
         return
 
     # Stream

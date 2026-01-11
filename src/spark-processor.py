@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
 High-Performance Data Accumulator
-Reads from Kafka and dumps to MongoDB as fast as possible for training.
+Reads from Kafka and dumps to MongoDB for training.
 - Removes slow Console sinks
 - Uses caching for single-pass processing
-- optimized for high throughput
 """
 
 from pyspark.sql import SparkSession
@@ -67,7 +66,7 @@ def write_to_mongo(batch_df, batch_id):
     # Force materialization to get count and ensure caching happens
     count = cached_df.count()
     
-    print(f"📦 Batch {batch_id}: Writing {count} transactions...")
+    print(f"Batch {batch_id}: Writing {count} transactions...")
 
     # 2. Write to MongoDB (Fastest operation first)
     try:
@@ -76,7 +75,7 @@ def write_to_mongo(batch_df, batch_id):
             .mode("append") \
             .save()
     except Exception as e:
-        print(f"   ❌ Error writing to Mongo: {e}")
+        print(f"Error writing to Mongo: {e}")
 
     # 3. Calculate Stats (In-memory, very fast)
     # We use a single aggregation pass instead of multiple .filter().count() calls
@@ -87,14 +86,14 @@ def write_to_mongo(batch_df, batch_id):
     fraud_count = stats["fraud_count"] if stats["fraud_count"] else 0
     normal_count = count - fraud_count
 
-    print(f"   ✅ Saved: {normal_count} Normal | 🚨 {fraud_count} Fraud")
+    print(f"Saved: {normal_count} Normal | {fraud_count} Fraud")
 
     # 4. Clear memory
     cached_df.unpersist()
 
 def main():
     print("=" * 80)
-    print("🚀 FAST DATA ACCUMULATOR")
+    print("FAST DATA ACCUMULATOR")
     print("=" * 80)
 
     # Initialize Spark Session with tuning for speed
@@ -106,7 +105,7 @@ def main():
                 "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,"
                 "org.mongodb.spark:mongo-spark-connector_2.12:10.4.0") \
         .config("spark.mongodb.write.connection.uri", 
-                "mongodb://admin:admin123@mongodb:27017/fraud_detection.transactions?authSource=admin") \
+                "mongodb://admin:admin123@mongodb:27017/fraud_detection.accumulated_training_data?authSource=admin") \
         .getOrCreate()
 
     spark.sparkContext.setLogLevel("ERROR")
@@ -128,8 +127,8 @@ def main():
         from_json(col("value").cast("string"), schema).alias("data")
     ).select("data.*")
 
-    print("✅ Connected to Kafka. Accumulating data...")
-    print("💡 Press Ctrl+C to stop (or use 'Enter' if running via 'just workflow')\n")
+    print("Connected to Kafka. Accumulating data...")
+    print("Press Ctrl+C to stop (or use 'Enter' if running via 'just workflow')\n")
 
     # Write Stream
     query = parsed_df.writeStream \

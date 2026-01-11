@@ -1,99 +1,128 @@
+#!/usr/bin/env python3
 """
-Train "Production" Models Directly from CSV
-Bypasses Kafka/MongoDB accumulation. 
-Reads the creditcard.csv directly, trains 3 models, and saves them to 'fully_trained'.
+Full ML Model Training for Fraud Detection
+Trains models using the COMPLETE CSV dataset directly (bypassing accumulation).
 """
-
-import os
-import sys
-# Try importing kagglehub, install if missing (for Spark container)
-try:
-    import kagglehub
-except ImportError:
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "kagglehub"])
-    import kagglehub
 
 from pyspark.sql import SparkSession
-from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml.classification import RandomForestClassifier, GBTClassifier, LogisticRegression
 from pyspark.ml import Pipeline
+from pyspark.ml.evaluation import BinaryClassificationEvaluator, MulticlassClassificationEvaluator
 from pyspark.sql.functions import col
+import sys
+import os
+import glob
+
+def print_section(title):
+    print("=" * 80)
+    print(f"🤖 {title}")
+    print("=" * 80)
+    print()
+
+def find_dataset():
+    """Find creditcard.csv in /data/kagglehub"""
+    search_path = "/data/kagglehub/**/creditcard.csv"
+    files = glob.glob(search_path, recursive=True)
+    if not files:
+        return None
+    return files[0]
 
 def main():
-    print("\n" + "="*80)
-    print("🚀 DIRECT TRAINING (CSV -> MODELS)")
-    print("="*80)
+    print_section("FULL ML MODEL TRAINING (DIRECT CSV)")
 
-    # 1. Get the Dataset (Direct Download)
-    print("📥 checking/downloading dataset via KaggleHub...")
-    try:
-        path = kagglehub.dataset_download("mlg-ulb/creditcardfraud")
-        csv_path = os.path.join(path, "creditcard.csv")
-        print(f"✅ Dataset found at: {csv_path}")
-    except Exception as e:
-        print(f"❌ Error downloading dataset: {e}")
-        return
-
-    # 2. Initialize Spark
+    # Initialize Spark
     spark = SparkSession.builder \
-        .appName("FraudDetectionDirectTrain") \
+        .appName("FullModelTraining") \
         .getOrCreate()
-    
-    spark.sparkContext.setLogLevel("ERROR")
 
-    # 3. Read CSV directly
-    print("📊 Reading CSV into Spark DataFrame...")
-    df = spark.read.option("header", "true") \
+    spark.sparkContext.setLogLevel("WARN")
+
+    # Step 1: Load data from CSV
+    print("📊 Step 1: Loading data from CSV...")
+    
+    csv_path = find_dataset()
+    if not csv_path:
+        print("❌ ERROR: Could not find 'creditcard.csv' in /data/kagglehub")
+        print("   Make sure the producer has run at least once to download the dataset.")
+        spark.stop()
+        sys.exit(1)
+
+    print(f"   📂 Found dataset: {csv_path}")
+
+    df = spark.read \
+        .option("header", "true") \
         .option("inferSchema", "true") \
         .csv(csv_path)
 
-    total = df.count()
-    print(f"✅ Loaded {total} records from CSV.")
+    total_count = df.count()
+    print(f"   ✅ Loaded {total_count} transactions from CSV")
 
-    # 4. Prepare Features (V1-V28 + Amount)
-    feature_cols = [f"V{i}" for i in range(1, 29)] + ["Amount"]
+    # Step 2: Feature engineering (Same as standard training)
+    print()
+    print("🔧 Step 2: Feature Engineering...")
+
+    feature_columns = [f"V{i}" for i in range(1, 29)] + ["Amount"]
     
-    # --- FIX WAS HERE: outputCol="features" ---
-    assembler = VectorAssembler(inputCols=feature_cols, outputCol="features")
+    # Ensure columns exist
+    missing_cols = [c for c in feature_columns if c not in df.columns]
+    if missing_cols:
+        print(f"❌ ERROR: Missing columns: {missing_cols}")
+        spark.stop()
+        sys.exit(1)
 
-    # 5. Define Models
-    rf = RandomForestClassifier(labelCol="Class", featuresCol="features", numTrees=50, maxDepth=10)
-    gbt = GBTClassifier(labelCol="Class", featuresCol="features", maxIter=50)
-    lr = LogisticRegression(labelCol="Class", featuresCol="features", maxIter=50, regParam=0.01)
+    df_clean = df.select(["Time", "Class"] + feature_columns)
 
-    # 6. Train and Save
-    output_base = "/app/models/fully_trained"
-    
-    # Random Forest
-    print("\n🌲 Training Random Forest...")
-    rf_pipeline = Pipeline(stages=[assembler, rf])
-    rf_model = rf_pipeline.fit(df)
-    rf_path = f"{output_base}/random_forest_model"
-    rf_model.write().overwrite().save(rf_path)
-    print(f"   ✅ Saved to: {rf_path}")
+    # Step 3: Train/Test Split
+    print()
+    print("🎯 Step 3: Preparing Train/Test Split...")
+    train_data, test_data = df_clean.randomSplit([0.8, 0.2], seed=42)
 
-    # Gradient Boosting
-    print("\n🚀 Training Gradient Boosting...")
-    gbt_pipeline = Pipeline(stages=[assembler, gbt])
-    gbt_model = gbt_pipeline.fit(df)
-    gbt_path = f"{output_base}/gradient_boosting_model"
-    gbt_model.write().overwrite().save(gbt_path)
-    print(f"   ✅ Saved to: {gbt_path}")
+    # Create feature pipeline
+    assembler = VectorAssembler(inputCols=feature_columns, outputCol="features_raw")
+    scaler = StandardScaler(inputCol="features_raw", outputCol="features", withStd=True, withMean=False)
 
-    # Logistic Regression
-    print("\n📈 Training Logistic Regression...")
-    lr_pipeline = Pipeline(stages=[assembler, lr])
-    lr_model = lr_pipeline.fit(df)
-    lr_path = f"{output_base}/logistic_regression_model"
-    lr_model.write().overwrite().save(lr_path)
-    print(f"   ✅ Saved to: {lr_path}")
+    # Step 4: Train Multiple Models
+    print()
+    print("🌲 Step 4: Training Multiple ML Models (FULL POWER)...")
 
-    print("\n" + "="*80)
-    print("🎉 TRAINING COMPLETE!")
-    print("   Models are ready in 'models/fully_trained/'")
-    print("   Run 'just promote-full' to use them.")
-    print("="*80 + "\n")
+    models_to_train = [
+        ("random_forest_full", RandomForestClassifier(
+            featuresCol="features", labelCol="Class", predictionCol="prediction", 
+            probabilityCol="probability", numTrees=100, maxDepth=10, seed=42
+        )),
+        ("gradient_boosting_full", GBTClassifier(
+            featuresCol="features", labelCol="Class", predictionCol="prediction", 
+            maxIter=50, maxDepth=5, seed=42
+        )),
+        ("logistic_regression_full", LogisticRegression(
+            featuresCol="features", labelCol="Class", predictionCol="prediction", 
+            probabilityCol="probability", maxIter=100, regParam=0.01
+        ))
+    ]
+
+    trained_models = {}
+    evaluator_auc = BinaryClassificationEvaluator(labelCol="Class", metricName="areaUnderROC")
+
+    for model_name, classifier in models_to_train:
+        print(f"🔄 Training {model_name}...")
+
+        pipeline = Pipeline(stages=[assembler, scaler, classifier])
+        model = pipeline.fit(train_data)
+        
+        # Evaluate
+        predictions = model.transform(test_data)
+        auc = evaluator_auc.evaluate(predictions)
+        print(f"   ✅ {model_name} AUC-ROC: {auc:.4f}")
+
+        # Save model (staged as _full)
+        model_path = f"/app/models/{model_name}"
+        model.write().overwrite().save(model_path)
+        print(f"   💾 Saved to: {model_path}")
+        print()
+
+    print("✅ Full training complete.")
+    spark.stop()
 
 if __name__ == "__main__":
     main()

@@ -14,12 +14,12 @@ MONGO_URI = "mongodb://admin:admin123@localhost:27017/?authSource=admin"
 DATABASE = "fraud_detection"
 
 # Collections to export
-# Update: Removed 'model_predictions' because our Optimized Spark job 
-# merged it into 'ensemble_results' to save speed.
+DATABASE = "fraud_detection"
 COLLECTIONS = [
-    "transactions",
-    "ensemble_results",
-    "flagged_transactions"
+    "accumulated_training_data", 
+    "live_stream_events", 
+    "fraud_predictions", 
+    "high_risk_alerts"
 ]
 
 def export_collection_to_excel(client, db_name, collection_name, output_dir):

@@ -21,10 +21,11 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
 KAFKA_TOPIC = os.getenv('KAFKA_TOPIC', "fraud-detection-stream")
 DB_FILE = os.getenv('STATE_FILE', "state/producer_state.db") 
 
-# --- TUNING FOR 30 MINUTE DEMO ---
-# 285,000 records / 30 mins = ~158 records/sec
-BATCH_SIZE = 100         # Send 100 records at a time (smooth visual updates)
-SLEEP_PER_BATCH = 0.6    # Sleep 0.6s between batches (Speed: ~166 records/sec)
+# --- TUNING FOR REAL-TIME SIMULATION ---
+# Slower speed since we now have "train_full_power" for model creation.
+# Aim for sustainable demo speed (e.g., 10-20 records/sec)
+BATCH_SIZE = 1000          # Fast batch size
+SLEEP_PER_BATCH = 0.1      # Fast sleep
 
 # Download Dataset
 print("Checking dataset...")
@@ -91,53 +92,57 @@ def simulate_stream():
 
     print(f"Loading data from {CSV_FILE_PATH}...")
     df = pd.read_csv(CSV_FILE_PATH)
-    
-    last_index = get_last_index()
-    start_index = last_index + 1
     total_rows = len(df)
     
-    if start_index >= total_rows:
-        print("Dataset already fully processed! Delete 'state/producer_state.db' to restart.")
-        return
-
-    print(f"🚀 Resuming simulation from index {start_index}...")
-    print(f"⏱️  Target Duration: ~30 minutes remaining")
-    print(f"⚡ Speed: ~{int(BATCH_SIZE / SLEEP_PER_BATCH)} records/second")
-
-    try:
-        count = 0
-        current_batch_end_index = start_index
-
-        subset_df = df.iloc[start_index:]
+    while True: # Infinite Loop for Continuous Demo
+        last_index = get_last_index()
+        start_index = last_index + 1
         
-        for row in subset_df.itertuples(index=True):
-            message = row._asdict()
-            del message['Index'] 
-            
-            producer.send(KAFKA_TOPIC, value=message)
-            
-            count += 1
-            current_batch_end_index = row.Index
+        if start_index >= total_rows:
+            print("🔄 Dataset finished. Restarting stream from beginning...")
+            start_index = 0
+            update_last_index(-1) # Reset state
+            time.sleep(2)
+            continue
 
-            if count % BATCH_SIZE == 0:
-                producer.flush()
-                update_last_index(current_batch_end_index)
-                
-                # Print every 10 batches (every 1000 records) to keep console clean
-                if count % (BATCH_SIZE * 10) == 0:
-                    progress = (current_batch_end_index / total_rows) * 100
-                    print(f"[{current_batch_end_index}/{total_rows}] 📤 Stream Progress: {progress:.1f}%")
-                
-                time.sleep(SLEEP_PER_BATCH)
+        print(f"Resuming simulation from index {start_index}...")
+        print(f"Speed: ~{int(BATCH_SIZE / SLEEP_PER_BATCH)} records/second")
 
-        producer.flush()
-        update_last_index(current_batch_end_index)
-        print(f"✅ Finished! Sent {count} total records.")
+        try:
+            count = 0
+            current_batch_end_index = start_index
+
+            subset_df = df.iloc[start_index:]
             
-    except KeyboardInterrupt:
-        print("\nStream paused. Progress saved.")
-    finally:
-        producer.close()
+            for row in subset_df.itertuples(index=True):
+                message = row._asdict()
+                del message['Index'] 
+                
+                producer.send(KAFKA_TOPIC, value=message)
+                
+                count += 1
+                current_batch_end_index = row.Index
+
+                if count % BATCH_SIZE == 0:
+                    producer.flush()
+                    update_last_index(current_batch_end_index)
+                    
+                    # Print every 10 batches (every 500 records) to keep console clean
+                    if count % (BATCH_SIZE * 10) == 0:
+                        progress = (current_batch_end_index / total_rows) * 100
+                        print(f"[{current_batch_end_index}/{total_rows}] Stream Progress: {progress:.1f}%")
+                    
+                    time.sleep(SLEEP_PER_BATCH)
+
+            producer.flush()
+            update_last_index(current_batch_end_index)
+            print(f"Batch run finished. Looping...")
+            
+        except KeyboardInterrupt:
+            print("\nStream paused. Progress saved.")
+            break
+        finally:
+            pass # Keep connection open for loop
 
 if __name__ == "__main__":
     simulate_stream()

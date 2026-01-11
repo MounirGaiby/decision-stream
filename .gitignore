@@ -62,3 +62,5 @@ derby.log
 /.dagster
 /$DAGSTER_HOME
 /exports
+
+/data
